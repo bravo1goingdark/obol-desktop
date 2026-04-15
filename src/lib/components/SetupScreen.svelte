@@ -65,7 +65,7 @@
     {#if rejectedByServer}
       <div class="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-[11px] text-destructive">
         The previous token was rejected by Obol (revoked, expired, or
-        never valid). Create a new one at useobol.com → Settings →
+        never valid). Create a new one at useobol.pages.dev → Settings →
         Security and paste it below.
       </div>
     {/if}
@@ -102,7 +102,7 @@
         on:click={openSettings}
         class="block w-full text-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
       >
-        Create a token on useobol.com →
+        Create a token on useobol.pages.dev →
       </button>
     </form>
   </div>
