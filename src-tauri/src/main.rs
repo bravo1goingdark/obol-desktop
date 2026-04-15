@@ -102,8 +102,11 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         Ok(payload) => {
             // Update tray title with mood + today spend — "at a glance" UX.
             if let Some(tray) = app.tray_by_id("main") {
-                let label =
-                    format!("{} {}", payload.mood.face, short_cents(payload.today_spend_cents));
+                let label = format!(
+                    "{} {}",
+                    payload.mood.face,
+                    short_cents(payload.today_spend_cents)
+                );
                 let _ = tray.set_title(Some(&label));
             }
             *state.last.lock() = Some(payload.clone());
@@ -146,8 +149,7 @@ fn spawn_poll_task(app: AppHandle) {
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let show = MenuItemBuilder::with_id("show", "Show window").build(app)?;
     let refresh = MenuItemBuilder::with_id("refresh", "Refresh now").build(app)?;
-    let disconnect =
-        MenuItemBuilder::with_id("disconnect", "Disconnect / Sign out").build(app)?;
+    let disconnect = MenuItemBuilder::with_id("disconnect", "Disconnect / Sign out").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Obol").build(app)?;
     MenuBuilder::new(app)
         .items(&[&show, &refresh])
@@ -236,7 +238,7 @@ fn main() {
                 .icon_as_template(true)
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| handle_menu_event(app, event))
+                .on_menu_event(handle_menu_event)
                 .on_tray_icon_event(|tray, event| {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,

@@ -68,10 +68,7 @@ impl PollError {
     }
 }
 
-pub async fn fetch_widget(
-    base_url: &str,
-    token: &str,
-) -> Result<WidgetPayload, PollError> {
+pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, PollError> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
         .user_agent(concat!("obol-desktop/", env!("CARGO_PKG_VERSION")))
