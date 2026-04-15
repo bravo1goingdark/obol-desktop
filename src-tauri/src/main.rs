@@ -3,9 +3,9 @@
 
 mod poll;
 
-use parking_lot::Mutex;
 use poll::{default_base_url, fetch_widget, WidgetPayload};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Duration;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
@@ -13,7 +13,6 @@ use tauri::{
     AppHandle, Emitter, Manager, State,
 };
 use tokio::sync::Notify;
-use tracing::{error, info, warn};
 
 const KEYRING_SERVICE: &str = "obol-desktop";
 const KEYRING_ACCOUNT: &str = "pat";
@@ -70,7 +69,7 @@ fn cmd_delete_token(state: State<'_, AppState>) -> Result<(), String> {
     let entry = keyring_entry()?;
     // delete_credential errors if the entry doesn't exist; swallow that.
     let _ = entry.delete_credential();
-    *state.last.lock() = None;
+    *state.last.lock().unwrap() = None;
     state.refresh.notify_one();
     Ok(())
 }
@@ -109,13 +108,13 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                 );
                 let _ = tray.set_title(Some(&label));
             }
-            *state.last.lock() = Some(payload.clone());
+            *state.last.lock().unwrap() = Some(payload.clone());
             if let Err(err) = app.emit("widget-update", payload) {
-                error!("failed to emit widget-update: {}", err);
+                eprintln!("failed to emit widget-update: {}", err);
             }
         }
         Err(err) => {
-            warn!("poll failed: {}", err);
+            eprintln!("poll failed: {}", err);
             let _ = app.emit("widget-error", err.tag());
         }
     }
@@ -178,7 +177,7 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
                 let _ = entry.delete_credential();
             }
             if let Some(state) = app.try_state::<AppState>() {
-                *state.last.lock() = None;
+                *state.last.lock().unwrap() = None;
                 state.refresh.notify_one();
             }
             if let Some(window) = app.get_webview_window("main") {
@@ -212,14 +211,8 @@ fn toggle_main_window(app: &AppHandle) {
 // ---------- App entrypoint ----------
 
 fn main() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .with_target(false)
-        .init();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AppState::new())
         .invoke_handler(tauri::generate_handler![
             cmd_save_token,
@@ -251,7 +244,7 @@ fn main() {
                 })
                 .build(app)?;
 
-            info!("obol-desktop started, starting poller");
+            eprintln!("obol-desktop started, starting poller");
             spawn_poll_task(app.handle().clone());
             Ok(())
         })

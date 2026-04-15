@@ -1,44 +1,44 @@
-// Cherry-picked from Obol's src/lib/utils/formatters.ts so the widget
-// formats money and percentages identically to the web overview.
+// Currency formatters for Obol widget.
 
-export function formatCents(cents: number, digits = 2): string {
-  const value = cents / 100;
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits,
-  }).format(value);
+let currencyFormatter: Intl.NumberFormat | null = null;
+let compactFormatter: Intl.NumberFormat | null = null;
+
+function getCurrencyFormatter(): Intl.NumberFormat {
+  if (!currencyFormatter) {
+    currencyFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  return currencyFormatter;
+}
+
+function getCompactFormatter(): Intl.NumberFormat {
+  if (!compactFormatter) {
+    compactFormatter = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      notation: "compact",
+      maximumFractionDigits: 1,
+    });
+  }
+  return compactFormatter;
+}
+
+export function formatCents(cents: number): string {
+  return getCurrencyFormatter().format(cents / 100);
 }
 
 export function formatCentsCompact(cents: number): string {
   const value = cents / 100;
   if (Math.abs(value) >= 1000) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(value);
+    return getCompactFormatter().format(value);
   }
   return formatCents(cents);
 }
 
-export function formatPercent(fraction: number, digits = 1): string {
-  return `${(fraction * 100).toFixed(digits)}%`;
-}
-
-export function providerDisplayName(provider: string): string {
-  const map: Record<string, string> = {
-    openai: "OpenAI",
-    anthropic: "Anthropic",
-    google: "Google AI",
-    openrouter: "OpenRouter",
-  };
-  return map[provider] ?? provider;
-}
-
-/** ISO → short relative time ("3 min ago", "2 h ago", "just now"). */
 export function formatRelative(iso: string | null): string {
   if (!iso) return "never";
   const ms = Date.now() - new Date(iso).getTime();
