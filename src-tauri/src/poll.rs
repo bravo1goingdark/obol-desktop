@@ -2,10 +2,23 @@
 //! Svelte side can render the right banner (unauthenticated /
 //! rate-limited / network).
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::time::Duration;
 
 const ENDPOINT_PATH: &str = "/api/desktop/widget";
+
+static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+
+fn get_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(Duration::from_secs(10))
+            .user_agent(concat!("obol-desktop/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("failed to create HTTP client")
+    })
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MoodTier {
@@ -69,14 +82,8 @@ impl PollError {
 }
 
 pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, PollError> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .user_agent(concat!("obol-desktop/", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| PollError::Network(e.to_string()))?;
-
     let url = format!("{}{}", base_url.trim_end_matches('/'), ENDPOINT_PATH);
-    let res = client
+    let res = get_client()
         .get(&url)
         .bearer_auth(token)
         .send()
