@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens copied verbatim from Obol's src/app.css so the widget
+ * renders identically to the web overview at the same zoom level.
+ * Light mode uses warm paper tones; dark mode is graphite. Any drift
+ * here creates a visible mismatch, so when the Obol palette changes
+ * this file should be updated in lockstep.
+ */
+
+@layer base {
+  :root {
+    --background: 40 10% 98%;
+    --foreground: 20 14% 8%;
+    --card: 40 10% 99%;
+    --card-foreground: 20 14% 8%;
+    --popover: 40 10% 99%;
+    --popover-foreground: 20 14% 8%;
+    --primary: 20 14% 8%;
+    --primary-foreground: 40 10% 98%;
+    --secondary: 40 8% 94%;
+    --secondary-foreground: 20 14% 14%;
+    --muted: 40 8% 95%;
+    --muted-foreground: 20 6% 42%;
+    --accent: 40 8% 94%;
+    --accent-foreground: 20 14% 14%;
+    --destructive: 4 64% 48%;
+    --destructive-foreground: 40 10% 98%;
+    --border: 30 8% 88%;
+    --input: 30 8% 88%;
+    --ring: 20 14% 8%;
+    --radius: 0.25rem;
+  }
+
+  .dark {
+    --background: 24 8% 7%;
+    --foreground: 40 10% 94%;
+    --card: 24 8% 9%;
+    --card-foreground: 40 10% 94%;
+    --popover: 24 8% 7%;
+    --popover-foreground: 40 10% 94%;
+    --primary: 40 10% 94%;
+    --primary-foreground: 24 8% 7%;
+    --secondary: 24 6% 14%;
+    --secondary-foreground: 40 10% 94%;
+    --muted: 24 6% 13%;
+    --muted-foreground: 30 6% 58%;
+    --accent: 24 6% 14%;
+    --accent-foreground: 40 10% 94%;
+    --destructive: 4 54% 52%;
+    --destructive-foreground: 40 10% 94%;
+    --border: 24 6% 17%;
+    --input: 24 6% 17%;
+    --ring: 40 10% 94%;
+  }
+}
+
+@layer base {
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+  html {
+    font-feature-settings: "cv11", "ss01", "rlig" 1, "calt" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    user-select: none;
+  }
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    overflow: hidden;
+  }
+  h1, h2, h3, h4 {
+    letter-spacing: -0.02em;
+  }
+  input, textarea, button {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: "Instrument Serif", "Times New Roman", serif;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+  }
+  .scroll-hidden::-webkit-scrollbar {
+    display: none;
+  }
+  .scroll-hidden {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

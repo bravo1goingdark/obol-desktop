@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Obol",
+  "version": "0.1.0",
+  "identifier": "app.useobol.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:1420",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Obol",
+        "width": 360,
+        "height": 520,
+        "minWidth": 320,
+        "minHeight": 420,
+        "resizable": true,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": false,
+        "center": true,
+        "visible": true,
+        "skipTaskbar": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://useobol.pages.dev https://useobol.com http://localhost:5173; img-src 'self' data:; script-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage", "rpm"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.png"
+    ],
+    "copyright": "© 2026 Obol",
+    "category": "DeveloperTool",
+    "shortDescription": "Obol desktop widget — mood + spend at a glance",
+    "longDescription": "Lightweight desktop widget that displays your Obol usage mood meter, monthly spend, today's spend, and a 14-day trend. Authenticates via a personal access token; lives in your system tray and updates every 30 minutes."
+  }
+}
