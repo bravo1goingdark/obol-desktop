@@ -35,13 +35,3 @@ export type ApiErrorKind =
   | "rate-limited"
   | "offline"
   | "network";
-
-export class ApiError extends Error {
-  constructor(
-    public readonly kind: ApiErrorKind,
-    message?: string,
-  ) {
-    super(message ?? kind);
-    this.name = "ApiError";
-  }
-}
