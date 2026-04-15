@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
+  import { openUrl } from "@tauri-apps/plugin-opener";
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import MiniSparkline from "$lib/components/MiniSparkline.svelte";
   import MoodMeter from "$lib/components/MoodMeter.svelte";
@@ -8,24 +10,56 @@
   import { theme } from "$lib/stores/theme";
   import { widget } from "$lib/stores/widget";
 
-  onMount(() => {
-    // Populate the widget on first mount — the Rust side will also
-    // push periodic updates via events.
+  let showSettings = false;
+  let autostart = false;
+  let autostartLoading = false;
+
+  onMount(async () => {
     widget.refresh();
+    try {
+      autostart = await invoke<boolean>("cmd_get_autostart");
+    } catch {
+      // Not fatal — autostart may be unavailable on some platforms.
+    }
   });
 
   function toggleTheme(): void {
     theme.toggle();
   }
+
+  async function openDashboard(): Promise<void> {
+    await openUrl("https://useobol.pages.dev/overview");
+  }
+
+  async function setAutostart(enabled: boolean): Promise<void> {
+    autostartLoading = true;
+    try {
+      await invoke("cmd_set_autostart", { enabled });
+      autostart = enabled;
+    } catch (err) {
+      console.error("autostart toggle failed", err);
+    } finally {
+      autostartLoading = false;
+    }
+  }
+
+  /** Returns subtitle for the "This month" card showing delta vs prev month.
+   *  Expressed as a percentage change + arrow so users can see trend at a glance. */
+  function prevMonthSubtitle(current: number, prev: number): string {
+    if (prev === 0) return "";
+    const diff = current - prev;
+    const pct = Math.round((Math.abs(diff) / prev) * 100);
+    if (diff > 0) return `↑ ${pct}% vs ${formatCentsCompact(prev)}`;
+    if (diff < 0) return `↓ ${pct}% vs ${formatCentsCompact(prev)}`;
+    return `= ${formatCentsCompact(prev)}`;
+  }
 </script>
 
 <div class="flex h-full flex-col">
-  <!-- Frameless titlebar. The drag handle is the left-hand `data-tauri-
-       drag-region` span — Tauri's webview runtime detects the attribute
-       on mousedown and starts an OS-level window drag. The button group
-       is a sibling that doesn't carry the attribute so its clicks stay
-       interactive. CSS-based `-webkit-app-region: drag` is macOS-only
-       and doesn't work on webkit2gtk, which is why we use the attribute. -->
+  <!-- Frameless titlebar. `data-tauri-drag-region` is detected by Tauri's
+       webview runtimes (webkit2gtk + WebView2) on mousedown to start an
+       OS-level drag. The button group is a sibling WITHOUT the attribute
+       so its clicks remain interactive. -->
   <div class="flex h-8 flex-shrink-0 items-center border-b border-border">
     <div
       data-tauri-drag-region
@@ -34,6 +68,7 @@
       Obol
     </div>
     <div class="flex items-center gap-1 pr-2">
+      <!-- Refresh -->
       <button
         type="button"
         on:click={widget.refresh}
@@ -47,6 +82,36 @@
           <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
         </svg>
       </button>
+      <!-- Open in browser -->
+      <button
+        type="button"
+        on:click={openDashboard}
+        title="Open in browser"
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label="Open in browser"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+        </svg>
+      </button>
+      <!-- Settings toggle -->
+      <button
+        type="button"
+        on:click={() => (showSettings = !showSettings)}
+        title="Settings"
+        class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+        aria-label="Settings"
+        class:text-foreground={showSettings}
+        class:bg-muted={showSettings}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
+      <!-- Theme toggle -->
       <button
         type="button"
         on:click={toggleTheme}
@@ -74,6 +139,32 @@
       </button>
     </div>
   </div>
+
+  <!-- Settings panel (slide in below titlebar) -->
+  {#if showSettings}
+    <div class="flex-shrink-0 border-b border-border bg-card px-4 py-2">
+      <label class="flex cursor-pointer items-center justify-between">
+        <span class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+          Launch at login
+        </span>
+        <!-- Toggle switch -->
+        <button
+          type="button"
+          role="switch"
+          aria-checked={autostart}
+          disabled={autostartLoading}
+          on:click={() => setAutostart(!autostart)}
+          class="relative inline-flex h-4 w-7 items-center rounded-full transition-colors disabled:opacity-50
+            {autostart ? 'bg-primary' : 'bg-muted'}"
+        >
+          <span
+            class="inline-block h-3 w-3 transform rounded-full bg-background shadow transition-transform
+              {autostart ? 'translate-x-3.5' : 'translate-x-0.5'}"
+          ></span>
+        </button>
+      </label>
+    </div>
+  {/if}
 
   <!-- Error banner (unauthenticated / offline / rate-limited) -->
   {#if $widget.error}
@@ -120,7 +211,7 @@
           rawCents={p.month_spend_cents}
           accent="primary"
           subtitle={p.prev_month_spend_cents > 0
-            ? `prev ${formatCentsCompact(p.prev_month_spend_cents)}`
+            ? prevMonthSubtitle(p.month_spend_cents, p.prev_month_spend_cents)
             : null}
         />
         <StatCard
@@ -158,7 +249,7 @@
     {/if}
   </div>
 
-  <!-- Footer — last updated -->
+  <!-- Footer — last updated + connections -->
   <div
     class="flex h-7 flex-shrink-0 items-center justify-between border-t border-border px-3 font-mono text-[9px] uppercase tracking-wider text-muted-foreground"
   >

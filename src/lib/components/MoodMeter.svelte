@@ -7,7 +7,7 @@
   export let animate = true;
 
   $: colorClass = (
-    {
+    { 
       chill: "text-muted-foreground",
       warm: "text-muted-foreground",
       hot: "text-amber-500",

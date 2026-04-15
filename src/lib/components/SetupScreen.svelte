@@ -37,7 +37,7 @@
   }
 
   async function openSettings(): Promise<void> {
-    await openUrl("https://useobol.pages.dev/settings?tab=security");
+    await openUrl("https://useobol.pages.dev/settings?tab=api");
   }
 </script>
 
@@ -66,7 +66,7 @@
       <div class="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-[11px] text-destructive">
         The previous token was rejected by Obol (revoked, expired, or
         never valid). Create a new one at useobol.pages.dev → Settings →
-        Security and paste it below.
+        API and paste it below.
       </div>
     {/if}
 

@@ -23,8 +23,8 @@
         "transparent": false,
         "alwaysOnTop": false,
         "center": true,
-        "visible": true,
-        "skipTaskbar": false
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
     "security": {

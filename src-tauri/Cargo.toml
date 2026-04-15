@@ -20,6 +20,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native-sync-persistent"] }
+tauri-plugin-notification = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-global-shortcut = "2"
 
 [profile.release]
 # Optimise for size. On macOS/Windows the webview is by far the biggest
