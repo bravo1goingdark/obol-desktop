@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Obol — AI spend, always in sight</title>
+  <meta name="description" content="Lightweight system tray widget that tracks your AI API costs in real time — with a mood that matches your bill." />
+  <meta property="og:title"       content="Obol — AI spend, always in sight" />
+  <meta property="og:description" content="Lightweight system tray widget that tracks your AI API costs in real time." />
+  <meta property="og:type"        content="website" />
+  <meta name="twitter:card"       content="summary" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Design tokens (exact match to app's app.css) ────────────────────── */
+    :root {
+      --bg:          hsl(40, 10%, 98%);
+      --bg-card:     hsl(40, 10%, 99%);
+      --fg:          hsl(20, 14%,  8%);
+      --fg-muted:    hsl(20,  6%, 42%);
+      --border:      hsl(30,  8%, 88%);
+      --primary:     hsl(20, 14%,  8%);
+      --destructive: hsl( 4, 64%, 48%);
+      --amber:       hsl(38, 92%, 50%);
+      --radius:      0.375rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:       hsl(24,  8%,  7%);
+        --bg-card:  hsl(24,  8%,  9%);
+        --fg:       hsl(40, 10%, 94%);
+        --fg-muted: hsl(30,  6%, 58%);
+        --border:   hsl(24,  6%, 17%);
+        --primary:  hsl(40, 10%, 94%);
+      }
+    }
+
+    /* ── Reset ───────────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+
+    /* ── Nav ─────────────────────────────────────────────────────────────── */
+    nav {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 2rem; height: 3rem;
+    }
+    .nav-logo {
+      font-size: .625rem; font-weight: 600;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: var(--fg-muted); text-decoration: none;
+    }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-link {
+      font-size: .75rem; color: var(--fg-muted);
+      text-decoration: none; transition: color .15s;
+    }
+    .nav-link:hover { color: var(--fg); }
+
+    /* ── Hero ────────────────────────────────────────────────────────────── */
+    .hero {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4rem;
+      align-items: center;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 6rem 2rem 5rem;
+    }
+    .hero-text { max-width: 480px; }
+    .hero-eyebrow {
+      font-size: .625rem; font-weight: 500;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: var(--fg-muted); margin-bottom: 1.25rem;
+    }
+    .hero-title {
+      font-family: 'Instrument Serif', 'Times New Roman', serif;
+      font-size: clamp(2.75rem, 7vw, 4.5rem);
+      font-weight: 400;
+      letter-spacing: -.03em;
+      line-height: 1.05;
+      margin-bottom: 1.25rem;
+    }
+    .hero-sub {
+      font-size: 1rem; line-height: 1.65;
+      color: var(--fg-muted); margin-bottom: 2.25rem;
+    }
+    .cta-row { display: flex; gap: .75rem; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex; align-items: center; gap: .375rem;
+      padding: .5625rem 1.125rem; border-radius: var(--radius);
+      font-size: .8125rem; font-weight: 500;
+      text-decoration: none; transition: opacity .15s;
+    }
+    .btn:hover { opacity: .75; }
+    .btn-primary { background: var(--fg); color: var(--bg); border: none; }
+    .btn-ghost   { background: transparent; color: var(--fg-muted); border: 1px solid var(--border); }
+
+    /* ── Widget preview (CSS-only mockup) ────────────────────────────────── */
+    .widget {
+      width: 230px;
+      border: 1px solid var(--border);
+      border-radius: .625rem;
+      background: var(--bg-card);
+      font-size: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 40px -8px rgba(0,0,0,.12), 0 2px 8px -2px rgba(0,0,0,.06);
+      flex-shrink: 0;
+      user-select: none;
+    }
+    /* titlebar */
+    .w-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 8px; height: 26px;
+      border-bottom: 1px solid var(--border);
+    }
+    .w-bar-title {
+      font-size: 7px; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--fg-muted);
+    }
+    .w-bar-icons { display: flex; gap: 2px; }
+    .w-icon {
+      width: 16px; height: 16px; border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--fg-muted); font-size: 8px;
+    }
+    /* body */
+    .w-body { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    /* mood card */
+    .w-mood-card {
+      border: 1px solid var(--border); border-radius: .375rem;
+      background: var(--bg); padding: 10px;
+    }
+    .w-mood-inner { display: flex; gap: 10px; align-items: flex-start; }
+    .w-face {
+      font-family: 'Inter', monospace; font-size: 18px; line-height: 1;
+      color: var(--destructive);
+      animation: mood-glitch .4s steps(3,end) infinite;
+      flex-shrink: 0; transform-origin: center;
+    }
+    .w-quote { font-family: 'Instrument Serif', serif; font-size: 13px; line-height: 1.2; margin-bottom: 2px; }
+    .w-quote-sub { font-size: 8px; color: var(--fg-muted); line-height: 1.4; }
+    .w-progress-track {
+      margin-top: 8px; height: 3px; border-radius: 99px;
+      background: hsl(24 6% 17% / .15);
+      overflow: hidden;
+    }
+    @media (prefers-color-scheme: dark) {
+      .w-progress-track { background: hsl(40 10% 94% / .1); }
+    }
+    .w-progress-fill {
+      height: 100%; width: 100%; border-radius: 99px;
+      background: var(--destructive);
+    }
+    .w-budget-pct { margin-top: 3px; font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted); }
+    /* stat grid */
+    .w-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .w-stat {
+      border: 1px solid var(--border); border-radius: .375rem;
+      background: var(--bg); padding: 8px;
+      position: relative; overflow: hidden;
+    }
+    .w-stat-accent {
+      position: absolute; inset-x: 0; top: 0; height: 2px;
+      background: linear-gradient(to right, var(--accent-color, var(--fg-muted)) 0%, transparent 100%);
+    }
+    .w-stat-label { font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted); margin-bottom: 3px; }
+    .w-stat-val { font-family: 'Instrument Serif', serif; font-size: 16px; line-height: 1; }
+    .w-stat-sub { font-size: 7px; color: var(--fg-muted); margin-top: 2px; }
+    /* sparkline card */
+    .w-spark-card {
+      border: 1px solid var(--border); border-radius: .375rem;
+      background: var(--bg); padding: 8px;
+    }
+    .w-spark-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .w-spark-label { font-size: 7px; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted); }
+    .w-spark-csv { font-size: 7px; color: var(--fg-muted); }
+    /* footer */
+    .w-footer {
+      display: flex; align-items: center; justify-content: space-between;
+      border-top: 1px solid var(--border);
+      padding: 5px 10px;
+      font-size: 7px; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--fg-muted);
+    }
+
+    /* ── Section wrapper ─────────────────────────────────────────────────── */
+    .section {
+      max-width: 900px; margin: 0 auto; padding: 5rem 2rem;
+    }
+    .section-rule {
+      border: none; border-top: 1px solid var(--border);
+      max-width: 900px; margin: 0 auto;
+    }
+    .section-label {
+      font-size: .625rem; font-weight: 500;
+      letter-spacing: .2em; text-transform: uppercase;
+      color: var(--fg-muted); margin-bottom: 2.5rem;
+    }
+
+    /* ── Features ────────────────────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      overflow: hidden;
+    }
+    .feature {
+      padding: 1.625rem 1.5rem;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .feature:nth-child(3n)       { border-right: none; }
+    .feature:nth-last-child(-n+3) { border-bottom: none; }
+    .feature-face {
+      font-family: 'Inter', monospace;
+      font-size: 1.125rem; letter-spacing: -.02em;
+      color: var(--fg-muted); margin-bottom: .75rem;
+      display: inline-block;
+    }
+    .feature-name {
+      font-size: .625rem; font-weight: 500;
+      letter-spacing: .15em; text-transform: uppercase;
+      color: var(--fg-muted); margin-bottom: .375rem;
+    }
+    .feature-desc {
+      font-size: .875rem; line-height: 1.55; color: var(--fg);
+    }
+
+    /* ── Tech strip ──────────────────────────────────────────────────────── */
+    .tech-table {
+      display: grid;
+      grid-template-columns: 7rem 1fr;
+      gap: .75rem 1.5rem;
+      align-items: baseline;
+    }
+    .tech-key {
+      font-size: .625rem; letter-spacing: .15em; text-transform: uppercase;
+      color: var(--fg-muted); padding-top: .1rem;
+    }
+    .tech-val { font-size: .9375rem; color: var(--fg); line-height: 1.5; }
+    .tech-val code {
+      font-family: ui-monospace, monospace;
+      font-size: .8125rem; color: var(--fg-muted);
+      background: hsl(0 0% 50% / .07);
+      padding: .1em .35em; border-radius: .25rem;
+    }
+    .tech-rule {
+      grid-column: 1 / -1;
+      border: none; border-top: 1px solid var(--border);
+      margin: .25rem 0;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      max-width: 900px; margin: 0 auto; padding: 1.5rem 2rem;
+    }
+    .footer-copy { font-size: .75rem; color: var(--fg-muted); }
+    footer a { font-size: .75rem; color: var(--fg-muted); text-decoration: none; transition: color .15s; }
+    footer a:hover { color: var(--fg); }
+
+    /* ── Mood animations (same keyframes as app) ─────────────────────────── */
+    @keyframes mood-breath {
+      0%,100% { transform: scale(1); opacity: .75; }
+      50%     { transform: scale(1.06); opacity: 1; }
+    }
+    @keyframes mood-glitch {
+      0%   { transform: translate(0,0)   skewX(0);     filter: none; }
+      20%  { transform: translate(-2px,1px) skewX(-4deg); filter: hue-rotate(-10deg); }
+      40%  { transform: translate(2px,-1px) skewX(4deg);  filter: hue-rotate(10deg); }
+      60%  { transform: translate(-1px,2px) skewX(-2deg); filter: hue-rotate(-5deg); }
+      80%  { transform: translate(1px,-2px) skewX(2deg);  filter: hue-rotate(5deg); }
+      100% { transform: translate(0,0)   skewX(0);     filter: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .w-face, .feature-face { animation: none !important; }
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 3.5rem 1.5rem 3rem;
+        gap: 3rem;
+      }
+      .widget { width: 100%; max-width: 280px; margin: 0 auto; }
+      .features-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+      .feature:nth-child(3n)       { border-right: 1px solid var(--border); }
+      .feature:nth-last-child(-n+3) { border-bottom: 1px solid var(--border); }
+      .feature:nth-child(2n)       { border-right: none; }
+      .feature:nth-last-child(-n+2) { border-bottom: none; }
+      .section { padding: 3.5rem 1.5rem; }
+      nav { padding: 0 1.5rem; }
+      footer { padding: 1.25rem 1.5rem; }
+    }
+    @media (max-width: 420px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .feature { border-right: none !important; }
+      .feature:last-child { border-bottom: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ──────────────────────────────────────────────────────────── -->
+  <nav>
+    <a href="/" class="nav-logo">Obol</a>
+    <div class="nav-links">
+      <a href="https://github.com/bravo1goingdark/obol-desktop/releases" class="nav-link">Releases</a>
+      <a href="https://github.com/bravo1goingdark/obol-desktop" class="nav-link">GitHub ↗</a>
+    </div>
+  </nav>
+
+  <!-- ── Hero ─────────────────────────────────────────────────────────── -->
+  <div class="hero">
+    <div class="hero-text">
+      <p class="hero-eyebrow">Open source · Tauri · Rust · Svelte</p>
+      <h1 class="hero-title">Your AI spend,<br>always in sight.</h1>
+      <p class="hero-sub">
+        A lightweight system tray widget that tracks your Claude, OpenAI,
+        and other API costs in real time — with a mood that matches your bill.
+      </p>
+      <div class="cta-row">
+        <a href="https://github.com/bravo1goingdark/obol-desktop/releases" class="btn btn-primary">
+          Download ↓
+        </a>
+        <a href="https://github.com/bravo1goingdark/obol-desktop" class="btn btn-ghost">
+          View source ↗
+        </a>
+      </div>
+    </div>
+
+    <!-- CSS widget mockup -->
+    <div class="widget" aria-hidden="true">
+      <div class="w-bar">
+        <span class="w-bar-title">Obol</span>
+        <div class="w-bar-icons">
+          <span class="w-icon">↺</span>
+          <span class="w-icon">⎋</span>
+          <span class="w-icon">⚙</span>
+          <span class="w-icon">☾</span>
+        </div>
+      </div>
+
+      <div class="w-body">
+        <!-- mood card -->
+        <div class="w-mood-card">
+          <div class="w-mood-inner">
+            <span class="w-face">(T_T)</span>
+            <div>
+              <p class="w-quote">faaaahh.</p>
+              <p class="w-quote-sub">At this rate you could<br>hire a junior dev.</p>
+            </div>
+          </div>
+          <div class="w-progress-track">
+            <div class="w-progress-fill"></div>
+          </div>
+          <p class="w-budget-pct">161% of $30 budget</p>
+        </div>
+
+        <!-- KPI row 1 -->
+        <div class="w-grid">
+          <div class="w-stat">
+            <div class="w-stat-accent" style="--accent-color: var(--primary)"></div>
+            <p class="w-stat-label">This month</p>
+            <p class="w-stat-val">$48.40</p>
+            <p class="w-stat-sub">↓ 10% vs $53.70</p>
+          </div>
+          <div class="w-stat">
+            <div class="w-stat-accent" style="--accent-color: var(--fg-muted)"></div>
+            <p class="w-stat-label">Today</p>
+            <p class="w-stat-val">$0.00</p>
+          </div>
+        </div>
+
+        <!-- KPI row 2 -->
+        <div class="w-grid">
+          <div class="w-stat">
+            <div class="w-stat-accent" style="--accent-color: #10b981"></div>
+            <p class="w-stat-label">Top model</p>
+            <p class="w-stat-val" style="font-size:11px;padding-top:3px">Claude Opus 4</p>
+            <p class="w-stat-sub">$29.84</p>
+          </div>
+          <div class="w-stat">
+            <div class="w-stat-accent" style="--accent-color: var(--amber)"></div>
+            <p class="w-stat-label">Forecast</p>
+            <p class="w-stat-val">$95.76</p>
+            <p class="w-stat-sub">month end</p>
+          </div>
+        </div>
+
+        <!-- sparkline -->
+        <div class="w-spark-card">
+          <div class="w-spark-header">
+            <span class="w-spark-label">Last 14 days</span>
+            <span class="w-spark-csv">CSV ↓</span>
+          </div>
+          <svg viewBox="0 0 210 40" width="100%" height="36" preserveAspectRatio="none">
+            <path
+              d="M3,32 L18,28 L33,30 L48,20 L63,24 L78,10 L93,18 L108,22 L123,8 L138,14 L153,16 L168,6 L183,20 L207,28"
+              fill="none"
+              stroke="var(--primary)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              opacity=".7"
+            />
+            <path
+              d="M3,32 L18,28 L33,30 L48,20 L63,24 L78,10 L93,18 L108,22 L123,8 L138,14 L153,16 L168,6 L183,20 L207,28 L207,37 L3,37 Z"
+              fill="var(--primary)"
+              fill-opacity=".06"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <div class="w-footer">
+        <span>updated just now</span>
+        <span>4 connections</span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="section-rule" />
+
+  <!-- ── Features ──────────────────────────────────────────────────────── -->
+  <section class="section">
+    <p class="section-label">Features</p>
+    <div class="features-grid">
+
+      <div class="feature">
+        <div class="feature-face" style="animation: mood-glitch .4s steps(3,end) infinite; color: var(--destructive)">(T_T)</div>
+        <p class="feature-name">Mood meter</p>
+        <p class="feature-desc">Your spend expressed as a face. From <span style="font-family:monospace">(^_^)</span> to <span style="font-family:monospace">(T_T)</span> — you'll know before you even look.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-face" style="animation: mood-breath 4.5s ease-in-out infinite">⬛</div>
+        <p class="feature-name">System tray</p>
+        <p class="feature-desc">Lives in your system tray, always visible. No browser tab, no floating window, no friction.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-face">🔔</div>
+        <p class="feature-name">Budget alerts</p>
+        <p class="feature-desc">Native OS notifications at 80% and 100% of your monthly budget. Set a daily cap too.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-face">📈</div>
+        <p class="feature-name">14-day trend</p>
+        <p class="feature-desc">Inline sparkline with hover tooltips so you can tell if today is an outlier or a pattern.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-face">🔒</div>
+        <p class="feature-name">Privacy first</p>
+        <p class="feature-desc">Your API token stays in the OS keychain. No cloud sync, no telemetry, no data leaving your machine.</p>
+      </div>
+
+      <div class="feature">
+        <div class="feature-face">⚡</div>
+        <p class="feature-name">Lightweight</p>
+        <p class="feature-desc">Built with Tauri and Rust. Tiny binary, near-zero idle CPU, configurable 1–15 min poll cadence.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="section-rule" />
+
+  <!-- ── Tech ──────────────────────────────────────────────────────────── -->
+  <section class="section">
+    <p class="section-label">Technical</p>
+    <div class="tech-table">
+
+      <span class="tech-key">Stack</span>
+      <span class="tech-val">
+        <code>Tauri 2</code> &nbsp;
+        <code>Rust</code> &nbsp;
+        <code>Svelte 4</code> &nbsp;
+        <code>Tailwind 3</code>
+      </span>
+
+      <hr class="tech-rule" />
+
+      <span class="tech-key">Platforms</span>
+      <span class="tech-val">Linux &nbsp;·&nbsp; macOS &nbsp;·&nbsp; Windows</span>
+
+      <span class="tech-key">Formats</span>
+      <span class="tech-val">
+        <code>.deb</code> &nbsp;
+        <code>.AppImage</code> &nbsp;
+        <code>.rpm</code> &nbsp;
+        <code>.dmg</code> &nbsp;
+        <code>.msi</code>
+      </span>
+
+      <hr class="tech-rule" />
+
+      <span class="tech-key">Auth</span>
+      <span class="tech-val">Personal access token stored in the OS keychain via <code>keyring</code></span>
+
+      <span class="tech-key">Polling</span>
+      <span class="tech-val">Configurable 1 – 15 min cadence &nbsp;·&nbsp; manual refresh</span>
+
+      <hr class="tech-rule" />
+
+      <span class="tech-key">License</span>
+      <span class="tech-val">MIT</span>
+
+    </div>
+  </section>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <footer>
+    <span class="footer-copy">© 2026 Obol</span>
+    <a href="https://github.com/bravo1goingdark/obol-desktop">github.com/bravo1goingdark/obol-desktop ↗</a>
+  </footer>
+
+</body>
+</html>

@@ -192,7 +192,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                 // Tooltip shows the fuller picture without opening the window.
                 let forecast_str = payload
                     .forecast_month_cents
-                    .map(|c| short_cents(c))
+                    .map(short_cents)
                     .unwrap_or_else(|| "—".to_string());
                 let tooltip = format!(
                     "Month: {}  |  Today: {}  |  Forecast: {}  |  {} connections",
@@ -216,7 +216,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                         .notification()
                         .builder()
                         .title("Obol — Budget Exceeded")
-                        .body(&format!(
+                        .body(format!(
                             "You've spent {} of your {} monthly budget ({:.0}%).",
                             short_cents(payload.month_spend_cents),
                             short_cents(payload.budget_cents),
@@ -230,7 +230,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                         .notification()
                         .builder()
                         .title("Obol — Budget Warning")
-                        .body(&format!(
+                        .body(format!(
                             "You've used {:.0}% of your {} monthly budget.",
                             pct,
                             short_cents(payload.budget_cents),
@@ -253,7 +253,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                         .notification()
                         .builder()
                         .title("Obol — Daily Limit Reached")
-                        .body(&format!(
+                        .body(format!(
                             "Today's spend ({}) has hit your {} daily limit.",
                             short_cents(payload.today_spend_cents),
                             short_cents(daily_limit),
