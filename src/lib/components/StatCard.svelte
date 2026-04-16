@@ -9,6 +9,8 @@
   export let rawCents: number | null = null;
   export let subtitle: string | null = null;
   export let accent: "primary" | "emerald" | "amber" | "muted" | "none" = "none";
+  /** When set, a copy icon appears on hover and writes this string to the clipboard. */
+  export let copyValue: string | null = null;
 
   const accentClass: Record<typeof accent, string> = {
     primary: "from-primary/60 via-primary/30 to-transparent",
@@ -20,6 +22,19 @@
 
   $: displayValue =
     rawCents !== null ? formatCents(rawCents) : (value ?? "—");
+
+  let copied = false;
+
+  async function copy(): Promise<void> {
+    if (!copyValue) return;
+    try {
+      await navigator.clipboard.writeText(copyValue);
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
+    } catch {
+      // clipboard unavailable — silently ignore
+    }
+  }
 </script>
 
 <div
@@ -29,6 +44,30 @@
     <div
       class={`pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accentClass[accent]}`}
     ></div>
+  {/if}
+
+  {#if copyValue}
+    <button
+      type="button"
+      on:click={copy}
+      aria-label="Copy value"
+      title={copied ? "Copied!" : "Copy"}
+      class="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded opacity-0 transition-opacity group-hover:opacity-100
+        {copied ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}"
+    >
+      {#if copied}
+        <!-- Checkmark -->
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      {:else}
+        <!-- Copy icon -->
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      {/if}
+    </button>
   {/if}
 
   <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">

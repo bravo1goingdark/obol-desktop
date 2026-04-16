@@ -17,9 +17,8 @@ use tokio::sync::Notify;
 
 const KEYRING_SERVICE: &str = "obol-desktop";
 const KEYRING_ACCOUNT: &str = "pat";
-// 2-minute cadence so a token revoked on the website takes effect in
-// the widget almost immediately.
-const POLL_INTERVAL_SECS: u64 = 120;
+// Default 2-minute cadence; overridable at runtime via cmd_set_poll_interval.
+const DEFAULT_POLL_INTERVAL_SECS: u64 = 120;
 const DASHBOARD_URL: &str = "https://useobol.pages.dev/overview";
 
 /// Shared state between Tauri commands and the background polling task.
@@ -36,6 +35,13 @@ pub struct AppState {
     /// Handle to the "Always on top" check-menu item so we can update its
     /// checkmark from the menu-event handler.
     pub aot_item: Mutex<Option<tauri::menu::CheckMenuItem<tauri::Wry>>>,
+    /// How long to sleep between polls (seconds). Writable at runtime.
+    pub poll_interval_secs: Mutex<u64>,
+    /// Daily spend cap in cents (0 = disabled). Writable at runtime.
+    pub daily_limit_cents: Mutex<i64>,
+    /// True once we've fired the daily-limit notification; reset when spend
+    /// drops back below the limit (e.g. on the next calendar day).
+    pub daily_alert_fired: Mutex<bool>,
 }
 
 impl AppState {
@@ -46,6 +52,9 @@ impl AppState {
             always_on_top: Mutex::new(false),
             last_notified_threshold: Mutex::new(0),
             aot_item: Mutex::new(None),
+            poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
+            daily_limit_cents: Mutex::new(0),
+            daily_alert_fired: Mutex::new(false),
         }
     }
 }
@@ -126,6 +135,31 @@ fn cmd_toggle_always_on_top(app: AppHandle, state: State<'_, AppState>) -> bool 
     new_aot
 }
 
+#[tauri::command]
+fn cmd_get_poll_interval(state: State<'_, AppState>) -> u64 {
+    *state.poll_interval_secs.lock().unwrap()
+}
+
+#[tauri::command]
+fn cmd_set_poll_interval(secs: u64, state: State<'_, AppState>) {
+    *state.poll_interval_secs.lock().unwrap() = secs.clamp(60, 900);
+    // Wake the sleeping poll loop so the new interval takes effect immediately.
+    state.refresh.notify_one();
+}
+
+#[tauri::command]
+fn cmd_get_daily_limit(state: State<'_, AppState>) -> i64 {
+    *state.daily_limit_cents.lock().unwrap()
+}
+
+#[tauri::command]
+fn cmd_set_daily_limit(cents: i64, state: State<'_, AppState>) {
+    *state.daily_limit_cents.lock().unwrap() = cents.max(0);
+    // Reset the fired flag whenever the limit changes so a new threshold
+    // can immediately fire if today's spend already exceeds it.
+    *state.daily_alert_fired.lock().unwrap() = false;
+}
+
 // ---------- Background polling task ----------
 
 fn short_cents(cents: i64) -> String {
@@ -153,6 +187,19 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                     short_cents(payload.today_spend_cents)
                 );
                 let _ = tray.set_title(Some(&label));
+                // Tooltip shows the fuller picture without opening the window.
+                let forecast_str = payload
+                    .forecast_month_cents
+                    .map(|c| short_cents(c))
+                    .unwrap_or_else(|| "—".to_string());
+                let tooltip = format!(
+                    "Month: {}  |  Today: {}  |  Forecast: {}  |  {} connections",
+                    short_cents(payload.month_spend_cents),
+                    short_cents(payload.today_spend_cents),
+                    forecast_str,
+                    payload.active_connections,
+                );
+                let _ = tray.set_tooltip(Some(&tooltip));
             }
 
             // Budget threshold notifications — fire once per crossing per session.
@@ -193,6 +240,28 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                 }
             }
 
+            // Daily spend limit notification.
+            let daily_limit = *state.daily_limit_cents.lock().unwrap();
+            if daily_limit > 0 {
+                let mut fired = state.daily_alert_fired.lock().unwrap();
+                if payload.today_spend_cents >= daily_limit && !*fired {
+                    *fired = true;
+                    drop(fired);
+                    let _ = app
+                        .notification()
+                        .builder()
+                        .title("Obol — Daily Limit Reached")
+                        .body(&format!(
+                            "Today's spend ({}) has hit your {} daily limit.",
+                            short_cents(payload.today_spend_cents),
+                            short_cents(daily_limit),
+                        ))
+                        .show();
+                } else if payload.today_spend_cents < daily_limit {
+                    *fired = false;
+                }
+            }
+
             *state.last.lock().unwrap() = Some(payload.clone());
             if let Err(err) = app.emit("widget-update", payload) {
                 eprintln!("failed to emit widget-update: {}", err);
@@ -215,8 +284,9 @@ fn spawn_poll_task(app: AppHandle) {
         // Kick an initial poll immediately on startup.
         poll_once(&app, state).await;
         loop {
+            let interval = *state.poll_interval_secs.lock().unwrap();
             tokio::select! {
-                _ = tokio::time::sleep(Duration::from_secs(POLL_INTERVAL_SECS)) => {}
+                _ = tokio::time::sleep(Duration::from_secs(interval)) => {}
                 _ = refresh.notified() => {}
             }
             poll_once(&app, state).await;
@@ -236,8 +306,6 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let disconnect = MenuItemBuilder::with_id("disconnect", "Disconnect / Sign out").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Obol").build(app)?;
 
-    // Store handle so menu-event handler can update the checkmark.
-    // We retrieve AppState after the menu is registered.
     app.state::<AppState>()
         .aot_item
         .lock()
@@ -357,6 +425,10 @@ fn main() {
             cmd_get_autostart,
             cmd_set_autostart,
             cmd_toggle_always_on_top,
+            cmd_get_poll_interval,
+            cmd_set_poll_interval,
+            cmd_get_daily_limit,
+            cmd_set_daily_limit,
         ])
         .setup(move |app| {
             // Register the global toggle shortcut.
