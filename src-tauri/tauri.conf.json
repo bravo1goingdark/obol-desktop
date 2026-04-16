@@ -28,7 +28,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://useobol.pages.dev https://useobol.com http://localhost:5173; img-src 'self' data:; script-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://useobol.pages.dev https://useobol.com http://localhost:5173; img-src 'self' data:; script-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {

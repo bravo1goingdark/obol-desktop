@@ -6,14 +6,16 @@ mod poll;
 use poll::{default_base_url, fetch_widget, WidgetPayload};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Duration;
 use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuEvent, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState};
+use tauri_plugin_global_shortcut::{
+    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
+};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Notify;
+use tokio::time::Duration;
 
 const KEYRING_SERVICE: &str = "obol-desktop";
 const KEYRING_ACCOUNT: &str = "pat";

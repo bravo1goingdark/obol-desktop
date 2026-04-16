@@ -4,12 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Obol</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Preload the two fonts on the critical render path. The full
+         @font-face declarations live in src/app.css (self-hosted woff2). -->
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/Inter-400.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="/fonts/InstrumentSerif-400.woff2" />
     <script>
       var saved = localStorage.getItem("theme");
       var sys = window.matchMedia("(prefers-color-scheme: dark)").matches;

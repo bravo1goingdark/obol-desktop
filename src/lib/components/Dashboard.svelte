@@ -5,7 +5,16 @@
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import MiniSparkline from "$lib/components/MiniSparkline.svelte";
   import MoodMeter from "$lib/components/MoodMeter.svelte";
-  import SettingsPage from "$lib/components/SettingsPage.svelte";
+  // SettingsPage is lazy-loaded on first click so it never inflates the
+  // initial JS chunk for users who never open settings.
+  import type SettingsPageType from "$lib/components/SettingsPage.svelte";
+  let SettingsPage: typeof SettingsPageType | null = null;
+  async function openSettings(): Promise<void> {
+    if (!SettingsPage) {
+      SettingsPage = (await import("$lib/components/SettingsPage.svelte")).default;
+    }
+    showSettings = true;
+  }
   import StatCard from "$lib/components/StatCard.svelte";
   import { formatCents, formatCentsCompact, formatRelative } from "$lib/formatters";
   import { theme } from "$lib/stores/theme";
@@ -65,8 +74,8 @@
   }
 </script>
 
-{#if showSettings}
-  <SettingsPage on:back={() => (showSettings = false)} />
+{#if showSettings && SettingsPage}
+  <svelte:component this={SettingsPage} on:back={() => (showSettings = false)} />
 {:else}
   <div class="flex h-full flex-col">
     <!-- Frameless titlebar -->
@@ -106,10 +115,10 @@
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
           </svg>
         </button>
-        <!-- Settings — navigates to SettingsPage -->
+        <!-- Settings — lazy-loads SettingsPage on first click -->
         <button
           type="button"
-          on:click={() => (showSettings = true)}
+          on:click={openSettings}
           title="Settings"
           aria-label="Settings"
           class="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"

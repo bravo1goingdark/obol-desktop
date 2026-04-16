@@ -14,6 +14,30 @@ export default defineConfig(async () => ({
     },
   },
 
+  build: {
+    // Both webkit2gtk (Linux) and WebView2 (Windows) support modern JS natively.
+    // Targeting esnext skips transpilation transforms that add dead weight.
+    target: "esnext",
+
+    // The module-preload polyfill (~1.5 KB) is pointless inside a Tauri webview
+    // where the module loader is always the same engine version.
+    modulePreload: { polyfill: false },
+
+    // esbuild is Vite's default for JS; be explicit so CI/CD isn't surprised.
+    minify: "esbuild",
+
+    rollupOptions: {
+      output: {
+        // Isolate the Tauri IPC glue into its own chunk so it hashes
+        // independently from app code — better long-term cache reuse
+        // across app updates.
+        manualChunks: {
+          tauri: ["@tauri-apps/api", "@tauri-apps/plugin-opener"],
+        },
+      },
+    },
+  },
+
   // Tauri expects a fixed port; fail if it can't bind.
   clearScreen: false,
   server: {
