@@ -27,5 +27,5 @@ Thumbs.db
 .env.*.local
 
 # Video
-video/node_modules
-video/out
+video/node_modules/
+video/out/
