@@ -4,11 +4,13 @@
 mod poll;
 
 use poll::{default_base_url, fetch_widget, WidgetPayload};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuEvent, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_global_shortcut::{
     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutEvent, ShortcutState,
 };
@@ -37,6 +39,12 @@ pub struct AppState {
     /// Handle to the "Always on top" check-menu item so we can update its
     /// checkmark from the menu-event handler.
     pub aot_item: Mutex<Option<tauri::menu::CheckMenuItem<tauri::Wry>>>,
+    /// Handle to the "Pause / Resume polling" item so we can update its
+    /// text when the state flips.
+    pub pause_item: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>>,
+    /// Handle to the "Copy today's cost" item so we can disable it when
+    /// there's no payload yet (fresh launch before first poll).
+    pub copy_today_item: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>>,
     /// How long to sleep between polls (seconds). Writable at runtime.
     pub poll_interval_secs: Mutex<u64>,
     /// Daily spend cap in cents (0 = disabled). Writable at runtime.
@@ -44,6 +52,9 @@ pub struct AppState {
     /// True once we've fired the daily-limit notification; reset when spend
     /// drops back below the limit (e.g. on the next calendar day).
     pub daily_alert_fired: Mutex<bool>,
+    /// When true, the poll loop skips fetching and leaves the last payload
+    /// visible. Set via the "Pause polling" tray item.
+    pub paused: AtomicBool,
 }
 
 impl AppState {
@@ -54,9 +65,12 @@ impl AppState {
             always_on_top: Mutex::new(false),
             last_notified_threshold: Mutex::new(0),
             aot_item: Mutex::new(None),
+            pause_item: Mutex::new(None),
+            copy_today_item: Mutex::new(None),
             poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
             daily_limit_cents: Mutex::new(0),
             daily_alert_fired: Mutex::new(false),
+            paused: AtomicBool::new(false),
         }
     }
 }
@@ -174,6 +188,22 @@ fn short_cents(cents: i64) -> String {
 }
 
 async fn poll_once(app: &AppHandle, state: &AppState) {
+    // Short-circuit when the user has paused polling via the tray menu.
+    // The last-known payload stays visible; only the tray label flips
+    // to `(zZz) <last spend>` so there's a visible cue.
+    if state.paused.load(Ordering::Relaxed) {
+        if let Some(tray) = app.tray_by_id("main") {
+            let last_label = state
+                .last
+                .lock()
+                .ok()
+                .and_then(|g| g.as_ref().map(|p| short_cents(p.today_spend_cents)))
+                .unwrap_or_else(|| "paused".to_string());
+            let _ = tray.set_title(Some(&format!("(zZz) {}", last_label)));
+        }
+        return;
+    }
+
     let Some(token) = load_token_from_keychain() else {
         // No token configured yet — nothing to do.
         return;
@@ -265,6 +295,19 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             }
 
             *state.last.lock().unwrap() = Some(payload.clone());
+
+            // Enable the "Copy today's cost" tray item — first successful
+            // poll means we have something worth copying.
+            if let Ok(guard) = state.copy_today_item.lock() {
+                if let Some(ref item) = *guard {
+                    let _ = item.set_enabled(true);
+                    let _ = item.set_text(format!(
+                        "Copy today's cost — {}",
+                        short_cents(payload.today_spend_cents)
+                    ));
+                }
+            }
+
             if let Err(err) = app.emit("widget-update", payload) {
                 eprintln!("failed to emit widget-update: {}", err);
             }
@@ -296,11 +339,57 @@ fn spawn_poll_task(app: AppHandle) {
     });
 }
 
+// ---------- Auto-updater ----------
+
+/// Fire one startup update check. Emits `update-available` with
+/// `{ version, notes, downloaded: bool }` when a newer release is
+/// published. The frontend (`App.svelte`) listens and renders the
+/// banner. Installation is user-initiated — we never auto-install
+/// without consent.
+///
+/// The plugin itself no-ops when `plugins.updater.active = false`, so
+/// this task is safe to leave wired in until the signing keypair is
+/// generated and the config flag is flipped on.
+fn spawn_update_check(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        use tauri_plugin_updater::UpdaterExt;
+        let updater = match app.updater() {
+            Ok(u) => u,
+            Err(err) => {
+                eprintln!("updater init skipped: {err}");
+                return;
+            }
+        };
+        match updater.check().await {
+            Ok(Some(update)) => {
+                let payload = serde_json::json!({
+                    "version": update.version,
+                    "notes": update.body.clone().unwrap_or_default(),
+                });
+                if let Err(err) = app.emit("update-available", payload) {
+                    eprintln!("failed to emit update-available: {err}");
+                }
+            }
+            Ok(None) => { /* already current — no-op */ }
+            Err(err) => {
+                eprintln!("update check failed: {err}");
+            }
+        }
+    });
+}
+
 // ---------- Tray ----------
 
 fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let show = MenuItemBuilder::with_id("show", "Show window").build(app)?;
     let refresh = MenuItemBuilder::with_id("refresh", "Refresh now").build(app)?;
+    // Disabled until the first successful poll — there's nothing to copy
+    // on a fresh launch.
+    let copy_today = MenuItemBuilder::with_id("copy_today", "Copy today's cost")
+        .enabled(false)
+        .build(app)?;
+    let pause = MenuItemBuilder::with_id("pause", "Pause polling").build(app)?;
     let aot = CheckMenuItemBuilder::with_id("always_on_top", "Always on top")
         .checked(false)
         .build(app)?;
@@ -308,14 +397,17 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let disconnect = MenuItemBuilder::with_id("disconnect", "Disconnect / Sign out").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Obol").build(app)?;
 
-    app.state::<AppState>()
-        .aot_item
+    let state = app.state::<AppState>();
+    state.aot_item.lock().unwrap().replace(aot.clone());
+    state.pause_item.lock().unwrap().replace(pause.clone());
+    state
+        .copy_today_item
         .lock()
         .unwrap()
-        .replace(aot.clone());
+        .replace(copy_today.clone());
 
     MenuBuilder::new(app)
-        .items(&[&show, &refresh, &aot, &open_browser])
+        .items(&[&show, &refresh, &copy_today, &pause, &aot, &open_browser])
         .separator()
         .item(&disconnect)
         .separator()
@@ -334,6 +426,62 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
         "refresh" => {
             if let Some(state) = app.try_state::<AppState>() {
                 state.refresh.notify_one();
+            }
+        }
+        "copy_today" => {
+            if let Some(state) = app.try_state::<AppState>() {
+                let value = state
+                    .last
+                    .lock()
+                    .ok()
+                    .and_then(|g| g.as_ref().map(|p| short_cents(p.today_spend_cents)));
+                if let Some(text) = value {
+                    if let Err(err) = app.clipboard().write_text(text.clone()) {
+                        eprintln!("clipboard write failed: {err}");
+                    } else {
+                        // Brief confirmation via OS notification.
+                        let _ = app
+                            .notification()
+                            .builder()
+                            .title("Obol")
+                            .body(format!("Copied today's cost: {}", text))
+                            .show();
+                    }
+                }
+            }
+        }
+        "pause" => {
+            if let Some(state) = app.try_state::<AppState>() {
+                // Flip the atomic and update the menu-item label to reflect
+                // the new state. The poll loop picks up the flag on its
+                // next iteration (or immediately, on the resume notify).
+                let now_paused = !state.paused.load(Ordering::Relaxed);
+                state.paused.store(now_paused, Ordering::Relaxed);
+                if let Ok(guard) = state.pause_item.lock() {
+                    if let Some(ref item) = *guard {
+                        let _ = item.set_text(if now_paused {
+                            "Resume polling"
+                        } else {
+                            "Pause polling"
+                        });
+                    }
+                }
+                if now_paused {
+                    // Update tray immediately so the user sees feedback
+                    // without waiting a full poll cycle.
+                    if let Some(tray) = app.tray_by_id("main") {
+                        let last_label = state
+                            .last
+                            .lock()
+                            .ok()
+                            .and_then(|g| g.as_ref().map(|p| short_cents(p.today_spend_cents)))
+                            .unwrap_or_else(|| "paused".to_string());
+                        let _ = tray.set_title(Some(&format!("(zZz) {}", last_label)));
+                    }
+                } else {
+                    // Resuming — kick the poll loop so the tray updates fast.
+                    state.refresh.notify_one();
+                }
             }
         }
         "always_on_top" => {
@@ -405,6 +553,9 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -464,6 +615,13 @@ fn main() {
 
             eprintln!("obol-desktop started, starting poller");
             spawn_poll_task(app.handle().clone());
+
+            // Auto-update check, run 5s after startup so the main window
+            // renders first. The plugin silently no-ops when
+            // plugins.updater.active = false in tauri.conf.json (v0.1
+            // state, until the user generates a signing keypair and sets
+            // active=true).
+            spawn_update_check(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())

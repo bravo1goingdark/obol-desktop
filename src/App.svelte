@@ -5,17 +5,55 @@
   import { token } from "$lib/stores/token";
   import { widget } from "$lib/stores/widget";
   import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
+  import { listen } from "@tauri-apps/api/event";
+  import { check as checkForUpdate } from "@tauri-apps/plugin-updater";
+  import { relaunch } from "@tauri-apps/plugin-process";
 
   let ready = false;
   let unlistenMove: (() => void) | null = null;
+  let unlistenUpdate: (() => void) | null = null;
 
   // Debounce timer for saving window position.
   let positionSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Update banner state. Populated by Rust side emitting `update-available`
+  // after a successful manifest check (~5s after startup). Null = no update.
+  let available: { version: string; notes: string } | null = null;
+  let installing = false;
+  let installError = "";
+
+  async function installUpdate() {
+    if (installing) return;
+    installing = true;
+    installError = "";
+    try {
+      const u = await checkForUpdate();
+      if (!u) {
+        available = null;
+        return;
+      }
+      await u.downloadAndInstall();
+      await relaunch();
+    } catch (err) {
+      installError = (err as Error).message;
+    } finally {
+      installing = false;
+    }
+  }
 
   onMount(async () => {
     await widget.wire();
     await token.load();
     ready = true;
+
+    // Subscribe to the Rust side's update-available event. Fires at most
+    // once per app session, ~5s after startup (see spawn_update_check).
+    unlistenUpdate = await listen<{ version: string; notes: string }>(
+      "update-available",
+      (e) => {
+        available = e.payload;
+      },
+    );
 
     const win = getCurrentWindow();
 
@@ -45,6 +83,7 @@
   onDestroy(() => {
     widget.dispose();
     if (unlistenMove) unlistenMove();
+    if (unlistenUpdate) unlistenUpdate();
     if (positionSaveTimer) clearTimeout(positionSaveTimer);
   });
 </script>
@@ -58,5 +97,46 @@
     <Dashboard />
   {:else}
     <SetupScreen />
+  {/if}
+
+  {#if available}
+    <!-- Bottom-right update banner. Dismissible; installation is
+         user-initiated via the button. -->
+    <div
+      class="pointer-events-auto fixed bottom-3 right-3 z-50 max-w-[280px] rounded-md border border-border bg-card/95 p-3 shadow-lg backdrop-blur"
+    >
+      <p class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+        Update available
+      </p>
+      <p class="mt-1 text-sm text-foreground">
+        Obol <span class="font-mono">{available.version}</span>
+      </p>
+      {#if available.notes}
+        <p class="mt-1 line-clamp-3 text-[11px] text-muted-foreground">
+          {available.notes}
+        </p>
+      {/if}
+      {#if installError}
+        <p class="mt-2 font-mono text-[10px] text-destructive">{installError}</p>
+      {/if}
+      <div class="mt-2 flex items-center gap-2">
+        <button
+          type="button"
+          on:click={installUpdate}
+          disabled={installing}
+          class="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {installing ? "Installing…" : "Update & restart"}
+        </button>
+        <button
+          type="button"
+          on:click={() => (available = null)}
+          disabled={installing}
+          class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+        >
+          Later
+        </button>
+      </div>
+    </div>
   {/if}
 </main>

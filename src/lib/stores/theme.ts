@@ -17,6 +17,21 @@ function apply(next: Theme): void {
 
 function create() {
   const { subscribe, set } = writable<Theme>(getInitial());
+
+  // Live-follow the OS when the user has NOT pinned a manual preference.
+  // The `index.html` inline script handles the first render; this keeps
+  // the widget in sync if the OS dark/light setting flips at runtime
+  // (macOS sunset mode, Windows focus assist, Linux with darkman, etc.).
+  const media = window.matchMedia("(prefers-color-scheme: dark)");
+  media.addEventListener("change", (e) => {
+    // Skip if the user explicitly chose a theme via the toggle button.
+    if (localStorage.getItem("theme")) return;
+    const next: Theme = e.matches ? "dark" : "light";
+    document.documentElement.classList.toggle("dark", next === "dark");
+    window.dispatchEvent(new CustomEvent("themechange", { detail: next }));
+    set(next);
+  });
+
   return {
     subscribe,
     toggle() {
@@ -26,6 +41,14 @@ function create() {
     },
     set(next: Theme) {
       apply(next);
+      set(next);
+    },
+    /** Forget the manual preference and return to OS-follow mode. */
+    resetToOs() {
+      localStorage.removeItem("theme");
+      const next: Theme = media.matches ? "dark" : "light";
+      document.documentElement.classList.toggle("dark", next === "dark");
+      window.dispatchEvent(new CustomEvent("themechange", { detail: next }));
       set(next);
     },
   };
