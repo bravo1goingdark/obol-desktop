@@ -25,3 +25,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Video
+video/node_modules
+video/out
