@@ -121,7 +121,8 @@ pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, 
                 .json::<TrialExpiredBody>()
                 .await
                 .unwrap_or(TrialExpiredBody {
-                    message: "Your desktop widget trial has ended. Upgrade to Pro to continue.".into(),
+                    message: "Your desktop widget trial has ended. Upgrade to Pro to continue."
+                        .into(),
                     upgrade_url: String::new(),
                     trial_ends_at: String::new(),
                 });
