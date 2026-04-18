@@ -33,5 +33,12 @@ export interface WidgetPayload {
 export type ApiErrorKind =
   | "unauthenticated"
   | "rate-limited"
+  | "trial_expired"
   | "offline"
   | "network";
+
+export interface TrialExpiredPayload {
+  message: string;
+  upgrade_url: string;
+  trial_ends_at: string;
+}

@@ -6,12 +6,13 @@ import { writable } from "svelte/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { token } from "./token";
-import type { ApiErrorKind, WidgetPayload } from "$lib/types";
+import type { ApiErrorKind, TrialExpiredPayload, WidgetPayload } from "$lib/types";
 
 export interface WidgetState {
   payload: WidgetPayload | null;
   loading: boolean;
   error: ApiErrorKind | null;
+  trialExpired: TrialExpiredPayload | null;
   lastUpdatedAt: string | null;
 }
 
@@ -19,6 +20,7 @@ const initial: WidgetState = {
   payload: null,
   loading: false,
   error: null,
+  trialExpired: null,
   lastUpdatedAt: null,
 };
 
@@ -37,6 +39,15 @@ function create() {
           loading: false,
           error: null,
           lastUpdatedAt: ev.payload.updated_at,
+        }));
+      }),
+    );
+    // Trial expired — Rust emits a structured payload with upgrade metadata.
+    unsubs.push(
+      await listen<TrialExpiredPayload>("widget-trial-expired", (ev) => {
+        update((s) => ({
+          ...s,
+          trialExpired: ev.payload,
         }));
       }),
     );

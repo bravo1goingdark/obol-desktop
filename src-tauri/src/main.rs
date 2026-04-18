@@ -55,6 +55,9 @@ pub struct AppState {
     /// When true, the poll loop skips fetching and leaves the last payload
     /// visible. Set via the "Pause polling" tray item.
     pub paused: AtomicBool,
+    /// When true, the server returned 402 (trial expired). Polling halts
+    /// until the user upgrades or re-authenticates with a new token.
+    pub trial_expired: AtomicBool,
 }
 
 impl AppState {
@@ -71,6 +74,7 @@ impl AppState {
             daily_limit_cents: Mutex::new(0),
             daily_alert_fired: Mutex::new(false),
             paused: AtomicBool::new(false),
+            trial_expired: AtomicBool::new(false),
         }
     }
 }
@@ -91,6 +95,8 @@ fn load_token_from_keychain() -> Option<String> {
 fn cmd_save_token(token: String, state: State<'_, AppState>) -> Result<(), String> {
     let entry = keyring_entry()?;
     entry.set_password(&token).map_err(|e| e.to_string())?;
+    // Clear trial-expired flag so the poller resumes with the new token.
+    state.trial_expired.store(false, Ordering::Relaxed);
     // Kick the poller so the UI updates immediately.
     state.refresh.notify_one();
     Ok(())
@@ -204,6 +210,12 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         return;
     }
 
+    // Stop polling when trial has expired — the user must upgrade or
+    // re-authenticate. Cleared when the token changes (cmd_save_token).
+    if state.trial_expired.load(Ordering::Relaxed) {
+        return;
+    }
+
     let Some(token) = load_token_from_keychain() else {
         // No token configured yet — nothing to do.
         return;
@@ -311,6 +323,12 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             if let Err(err) = app.emit("widget-update", payload) {
                 eprintln!("failed to emit widget-update: {}", err);
             }
+        }
+        Err(poll::PollError::TrialExpired(payload)) => {
+            eprintln!("poll failed: trial expired");
+            state.trial_expired.store(true, Ordering::Relaxed);
+            let _ = app.emit("widget-trial-expired", &payload);
+            let _ = app.emit("widget-error", "trial_expired");
         }
         Err(err) => {
             eprintln!("poll failed: {}", err);

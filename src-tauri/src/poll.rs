@@ -1,6 +1,6 @@
 //! HTTP fetch for the Obol widget payload. Returns typed errors so the
 //! Svelte side can render the right banner (unauthenticated /
-//! rate-limited / network).
+//! rate-limited / trial_expired / network).
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -56,12 +56,34 @@ pub struct WidgetPayload {
     pub updated_at: String,
 }
 
+/// Metadata from the 402 `trial_expired` response. Emitted as a
+/// separate Tauri event so the Svelte UI can show the upgrade URL.
+#[derive(Debug, Clone, Serialize)]
+pub struct TrialExpiredPayload {
+    pub message: String,
+    pub upgrade_url: String,
+    pub trial_ends_at: String,
+}
+
+/// 402 response body from the Obol API.
+#[derive(Debug, Deserialize)]
+struct TrialExpiredBody {
+    #[serde(default)]
+    message: String,
+    #[serde(default)]
+    upgrade_url: String,
+    #[serde(default)]
+    trial_ends_at: String,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PollError {
     #[error("unauthenticated")]
     Unauthenticated,
     #[error("rate-limited")]
     RateLimited,
+    #[error("trial expired")]
+    TrialExpired(TrialExpiredPayload),
     #[error("network: {0}")]
     Network(String),
     #[error("decode: {0}")]
@@ -75,6 +97,7 @@ impl PollError {
         match self {
             PollError::Unauthenticated => "unauthenticated",
             PollError::RateLimited => "rate-limited",
+            PollError::TrialExpired(_) => "trial_expired",
             PollError::Network(_) => "network",
             PollError::Decode(_) => "network",
         }
@@ -92,6 +115,22 @@ pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, 
 
     match res.status().as_u16() {
         401 => return Err(PollError::Unauthenticated),
+        402 => {
+            // Trial expired — parse the body for upgrade metadata.
+            let body = res
+                .json::<TrialExpiredBody>()
+                .await
+                .unwrap_or(TrialExpiredBody {
+                    message: "Your desktop widget trial has ended. Upgrade to Pro to continue.".into(),
+                    upgrade_url: String::new(),
+                    trial_ends_at: String::new(),
+                });
+            return Err(PollError::TrialExpired(TrialExpiredPayload {
+                message: body.message,
+                upgrade_url: body.upgrade_url,
+                trial_ends_at: body.trial_ends_at,
+            }));
+        }
         429 => return Err(PollError::RateLimited),
         s if !(200..300).contains(&s) => {
             return Err(PollError::Network(format!("HTTP {}", s)));
