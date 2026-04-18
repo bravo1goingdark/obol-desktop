@@ -58,6 +58,9 @@ pub struct AppState {
     /// When true, the server returned 402 (trial expired). Polling halts
     /// until the user upgrades or re-authenticates with a new token.
     pub trial_expired: AtomicBool,
+    /// Last ETag value returned by the widget endpoint. Sent as
+    /// `If-None-Match` on the next poll so unchanged payloads return 304.
+    pub last_etag: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -75,6 +78,7 @@ impl AppState {
             daily_alert_fired: Mutex::new(false),
             paused: AtomicBool::new(false),
             trial_expired: AtomicBool::new(false),
+            last_etag: Mutex::new(None),
         }
     }
 }
@@ -221,8 +225,31 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         return;
     };
     let base_url = default_base_url();
-    match fetch_widget(&base_url, &token).await {
-        Ok(payload) => {
+    let etag = state.last_etag.lock().unwrap().clone();
+    match fetch_widget(&base_url, &token, etag.as_deref()).await {
+        Ok(None) => {
+            // 304 Not Modified — payload unchanged. Just refresh the
+            // tray tooltip timestamp so the user sees the poll is alive.
+            if let Some(tray) = app.tray_by_id("main") {
+                if let Some(ref payload) = *state.last.lock().unwrap() {
+                    let forecast_str = payload
+                        .forecast_month_cents
+                        .map(short_cents)
+                        .unwrap_or_else(|| "—".to_string());
+                    let tooltip = format!(
+                        "Month: {}  |  Today: {}  |  Forecast: {}  |  {} connections",
+                        short_cents(payload.month_spend_cents),
+                        short_cents(payload.today_spend_cents),
+                        forecast_str,
+                        payload.active_connections,
+                    );
+                    let _ = tray.set_tooltip(Some(&tooltip));
+                }
+            }
+        }
+        Ok(Some((payload, new_etag))) => {
+            // Store the new ETag for the next conditional request.
+            *state.last_etag.lock().unwrap() = new_etag;
             // Update tray title with mood face + today's spend for at-a-glance UX.
             if let Some(tray) = app.tray_by_id("main") {
                 let label = format!(
@@ -326,12 +353,15 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         }
         Err(poll::PollError::TrialExpired(payload)) => {
             eprintln!("poll failed: trial expired");
+            *state.last_etag.lock().unwrap() = None;
             state.trial_expired.store(true, Ordering::Relaxed);
             let _ = app.emit("widget-trial-expired", &payload);
             let _ = app.emit("widget-error", "trial_expired");
         }
         Err(err) => {
             eprintln!("poll failed: {}", err);
+            // Clear the ETag so the next poll does a full fetch.
+            *state.last_etag.lock().unwrap() = None;
             let _ = app.emit("widget-error", err.tag());
         }
     }

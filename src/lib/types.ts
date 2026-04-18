@@ -38,7 +38,9 @@ export type ApiErrorKind =
   | "network";
 
 export interface TrialExpiredPayload {
+  error: string;
   message: string;
   upgrade_url: string;
+  trial_started_at: string;
   trial_ends_at: string;
 }

@@ -60,8 +60,10 @@ pub struct WidgetPayload {
 /// separate Tauri event so the Svelte UI can show the upgrade URL.
 #[derive(Debug, Clone, Serialize)]
 pub struct TrialExpiredPayload {
+    pub error: String,
     pub message: String,
     pub upgrade_url: String,
+    pub trial_started_at: String,
     pub trial_ends_at: String,
 }
 
@@ -69,9 +71,13 @@ pub struct TrialExpiredPayload {
 #[derive(Debug, Deserialize)]
 struct TrialExpiredBody {
     #[serde(default)]
+    error: String,
+    #[serde(default)]
     message: String,
     #[serde(default)]
     upgrade_url: String,
+    #[serde(default)]
+    trial_started_at: String,
     #[serde(default)]
     trial_ends_at: String,
 }
@@ -104,16 +110,28 @@ impl PollError {
     }
 }
 
-pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, PollError> {
+/// Fetch the widget payload from the Obol API.
+///
+/// When `etag` is `Some`, an `If-None-Match` header is sent. A 304
+/// response returns `Ok(None)` — the caller should keep its cached
+/// payload. A successful 200 returns `Ok(Some((payload, new_etag)))`.
+pub async fn fetch_widget(
+    base_url: &str,
+    token: &str,
+    etag: Option<&str>,
+) -> Result<Option<(WidgetPayload, Option<String>)>, PollError> {
     let url = format!("{}{}", base_url.trim_end_matches('/'), ENDPOINT_PATH);
-    let res = get_client()
-        .get(&url)
-        .bearer_auth(token)
+    let mut req = get_client().get(&url).bearer_auth(token);
+    if let Some(tag) = etag {
+        req = req.header("If-None-Match", tag);
+    }
+    let res = req
         .send()
         .await
         .map_err(|e| PollError::Network(e.to_string()))?;
 
     match res.status().as_u16() {
+        304 => return Ok(None),
         401 => return Err(PollError::Unauthenticated),
         402 => {
             // Trial expired — parse the body for upgrade metadata.
@@ -121,14 +139,18 @@ pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, 
                 .json::<TrialExpiredBody>()
                 .await
                 .unwrap_or(TrialExpiredBody {
+                    error: "trial_expired".into(),
                     message: "Your desktop widget trial has ended. Upgrade to Pro to continue."
                         .into(),
                     upgrade_url: String::new(),
+                    trial_started_at: String::new(),
                     trial_ends_at: String::new(),
                 });
             return Err(PollError::TrialExpired(TrialExpiredPayload {
+                error: body.error,
                 message: body.message,
                 upgrade_url: body.upgrade_url,
+                trial_started_at: body.trial_started_at,
                 trial_ends_at: body.trial_ends_at,
             }));
         }
@@ -139,9 +161,19 @@ pub async fn fetch_widget(base_url: &str, token: &str) -> Result<WidgetPayload, 
         _ => {}
     }
 
-    res.json::<WidgetPayload>()
+    // Extract the ETag header before .json() consumes the response.
+    let new_etag = res
+        .headers()
+        .get("etag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+
+    let payload = res
+        .json::<WidgetPayload>()
         .await
-        .map_err(|e| PollError::Decode(e.to_string()))
+        .map_err(|e| PollError::Decode(e.to_string()))?;
+
+    Ok(Some((payload, new_etag)))
 }
 
 // Fallback base URL if no env var is set. Points at the Cloudflare Pages
