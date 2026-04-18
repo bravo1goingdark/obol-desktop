@@ -5,6 +5,7 @@
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import MiniSparkline from "$lib/components/MiniSparkline.svelte";
   import MoodMeter from "$lib/components/MoodMeter.svelte";
+  import Logo from "$lib/components/Logo.svelte";
   // SettingsPage is lazy-loaded on first click so it never inflates the
   // initial JS chunk for users who never open settings.
   import type SettingsPageType from "$lib/components/SettingsPage.svelte";
@@ -82,9 +83,10 @@
     <div class="flex h-8 flex-shrink-0 items-center border-b border-border">
       <div
         data-tauri-drag-region
-        class="flex flex-1 items-center px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
+        class="flex flex-1 items-center gap-2 px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
       >
-        Obol
+        <Logo size={14} />
+        <span>Obol</span>
       </div>
       <div class="flex items-center gap-1 pr-2">
         <!-- Refresh -->
