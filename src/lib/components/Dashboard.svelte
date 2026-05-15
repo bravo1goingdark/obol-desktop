@@ -24,6 +24,7 @@
   let showSettings = false;
   let csvExported = false;
   let csvExportTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeTab: "overview" | "insights" | "proxy" = "overview";
 
   // ── Cost-since-last-open delta ──────────────────────────────────────────
   let deltaCents: number | null = null;
@@ -293,6 +294,24 @@
       </div>
     {/if}
 
+    <!-- Tab bar -->
+    {#if $widget.payload}
+      <div class="flex h-7 flex-shrink-0 items-center gap-0 border-b border-border px-3">
+        <button type="button" on:click={() => (activeTab = "overview")}
+          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'overview' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
+          Overview
+        </button>
+        <button type="button" on:click={() => (activeTab = "insights")}
+          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'insights' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
+          Insights
+        </button>
+        <button type="button" on:click={() => (activeTab = "proxy")}
+          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'proxy' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
+          Proxy
+        </button>
+      </div>
+    {/if}
+
     <!-- Scroll container -->
     <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
       {#if !$widget.payload}
@@ -304,33 +323,8 @@
       {:else}
         {@const p = $widget.payload}
 
-        <!-- Cost since last open delta badge -->
-        {#if deltaVisible && deltaCents && deltaCents > 0}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
-            <span class="font-mono text-[10px] text-primary">+{formatCents(deltaCents)}</span>
-            <span class="text-[10px] text-muted-foreground">since you last looked</span>
-          </div>
-        {/if}
-
-        <!-- Anomaly alert -->
-        {#if p.anomaly}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
-            <span class="text-[10px]">⚠️</span>
-            <span class="text-[10px] text-destructive">
-              Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
-            </span>
-          </div>
-        {/if}
-
-        <!-- Cache savings -->
-        {#if p.cache && p.cache.savings_cents > 0}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
-            <span class="text-[10px]">💰</span>
-            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
-              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
-            </span>
-          </div>
-        {/if}
+        <!-- ═══ OVERVIEW TAB ═══ -->
+        {#if activeTab === "overview"}
 
         <!-- Mood meter -->
         <div class="mb-3 rounded-lg border border-border bg-card p-4">
@@ -372,6 +366,60 @@
             copyValue={formatCents(p.today_spend_cents)}
           />
         </div>
+
+        <!-- 14-day sparkline (in Overview) -->
+        <div class="rounded-lg border border-border bg-card p-4">
+          <div class="mb-2 flex items-center justify-between">
+            <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              Last 14 days
+            </p>
+            {#if p.daily_series.length > 0}
+              <button
+                type="button"
+                on:click={() => exportCsv(p.daily_series)}
+                title="Export CSV"
+                class="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors
+                  {csvExported
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+              >
+                {csvExported ? "✓ Exported" : "CSV ↓"}
+              </button>
+            {/if}
+          </div>
+          <MiniSparkline data={p.daily_series} />
+        </div>
+
+        <!-- ═══ INSIGHTS TAB ═══ -->
+        {:else if activeTab === "insights"}
+
+        <!-- Delta badge -->
+        {#if deltaVisible && deltaCents && deltaCents > 0}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
+            <span class="font-mono text-[10px] text-primary">+{formatCents(deltaCents)}</span>
+            <span class="text-[10px] text-muted-foreground">since you last looked</span>
+          </div>
+        {/if}
+
+        <!-- Anomaly alert -->
+        {#if p.anomaly}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
+            <span class="text-[10px]">⚠️</span>
+            <span class="text-[10px] text-destructive">
+              Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
+            </span>
+          </div>
+        {/if}
+
+        <!-- Cache savings -->
+        {#if p.cache && p.cache.savings_cents > 0}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
+            <span class="text-[10px]">💰</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
+              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
+            </span>
+          </div>
+        {/if}
 
         <!-- Top model + forecast -->
         <div class="mb-3 grid grid-cols-2 gap-3">
@@ -441,44 +489,9 @@
           </div>
         {/if}
 
-        <!-- 14-day sparkline -->
-        <div class="mb-3 rounded-lg border border-border bg-card p-4">
-          <div class="mb-2 flex items-center justify-between">
-            <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Last 14 days
-            </p>
-            {#if p.daily_series.length > 0}
-              <button
-                type="button"
-                on:click={() => exportCsv(p.daily_series)}
-                title="Export CSV"
-                class="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors
-                  {csvExported
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-              >
-                {#if csvExported}
-                  <!-- Checkmark -->
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                  Exported
-                {:else}
-                  <!-- Download icon -->
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                  CSV
-                {/if}
-              </button>
-            {/if}
-          </div>
-          <MiniSparkline data={p.daily_series} />
-        </div>
+        <!-- ═══ PROXY TAB ═══ -->
+        {:else if activeTab === "proxy"}
 
-        <!-- Proxy stats -->
         {#if p.proxy}
           <div class="mb-3 rounded-lg border border-border bg-card p-4">
             <div class="mb-2 flex items-center justify-between">
@@ -520,6 +533,14 @@
             <!-- Live feed -->
             <ProxyFeed requests={p.proxy.recent_requests} />
           </div>
+        {:else}
+          <div class="flex h-full items-center justify-center">
+            <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              No proxy data — route calls through Obol to see stats
+            </p>
+          </div>
+        {/if}
+
         {/if}
       {/if}
     </div>
