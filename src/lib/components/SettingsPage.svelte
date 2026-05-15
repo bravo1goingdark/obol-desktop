@@ -6,6 +6,24 @@
 
   const dispatch = createEventDispatcher<{ back: void }>();
 
+  // ── Widget skins ─────────────────────────────────────────────────────────
+  const SKINS = [
+    { label: "Default", value: "", icon: "◐" },
+    { label: "Terminal", value: "terminal", icon: "▶" },
+    { label: "Paper", value: "paper", icon: "📜" },
+  ] as const;
+  let activeSkin = localStorage.getItem("obol_skin") || "";
+
+  function setSkin(value: string): void {
+    activeSkin = value;
+    localStorage.setItem("obol_skin", value);
+    if (value) {
+      document.documentElement.setAttribute("data-skin", value);
+    } else {
+      document.documentElement.removeAttribute("data-skin");
+    }
+  }
+
   // ── Autostart ────────────────────────────────────────────────────────────
   let autostart = false;
   let autostartLoading = false;
@@ -227,6 +245,38 @@
     </section>
 
     <!-- ── ACCOUNT ────────────────────────────────────────────── -->
+    <section>
+      <p class="mb-1.5 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
+        Appearance
+      </p>
+      <div class="rounded-lg border border-border bg-card overflow-hidden">
+        <div class="px-4 py-3">
+          <div class="flex items-center justify-between gap-4">
+            <span class="text-[13px] font-medium">Widget skin</span>
+          </div>
+          <div class="mt-2 flex gap-2">
+            {#each SKINS as s}
+              <button
+                type="button"
+                on:click={() => setSkin(s.value)}
+                class="flex-1 rounded-md border px-2 py-2 text-center text-[10px] font-medium transition-all
+                  {activeSkin === s.value
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border text-muted-foreground hover:border-foreground/30'}"
+              >
+                <span class="block text-sm mb-0.5">{s.icon}</span>
+                {s.label}
+              </button>
+            {/each}
+          </div>
+          <p class="mt-2 text-[11px] leading-snug text-muted-foreground">
+            Changes the widget's color palette and typography.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── SIGN OUT ───────────────────────────────────────────── -->
     <section>
       <p class="mb-1.5 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
         Account

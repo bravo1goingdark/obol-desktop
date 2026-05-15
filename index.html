@@ -13,6 +13,8 @@
       var sys = window.matchMedia("(prefers-color-scheme: dark)").matches;
       var theme = saved || (sys ? "dark" : "light");
       if (theme === "dark") document.documentElement.classList.add("dark");
+      var skin = localStorage.getItem("obol_skin");
+      if (skin) document.documentElement.setAttribute("data-skin", skin);
     </script>
   </head>
   <body>
