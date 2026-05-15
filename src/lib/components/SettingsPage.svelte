@@ -10,7 +10,7 @@
   const SKINS = [
     { label: "Default", value: "", icon: "◐" },
     { label: "Terminal", value: "terminal", icon: "▶" },
-    { label: "Paper", value: "paper", icon: "📜" },
+    { label: "Neon", value: "paper", icon: "⚡" },
   ] as const;
   let activeSkin = localStorage.getItem("obol_skin") || "";
 

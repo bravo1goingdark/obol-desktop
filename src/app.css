@@ -172,23 +172,23 @@
 
 /* Paper: warm sepia, book-like */
 [data-skin="paper"] {
-  --background: 40 30% 95%;
-  --foreground: 30 20% 15%;
-  --card: 40 25% 97%;
-  --card-foreground: 30 20% 15%;
-  --primary: 30 20% 15%;
-  --primary-foreground: 40 30% 95%;
-  --muted: 35 15% 90%;
-  --muted-foreground: 30 10% 45%;
-  --border: 35 15% 82%;
-  --input: 35 15% 82%;
-  --ring: 30 20% 15%;
-  --destructive: 4 64% 48%;
-  --destructive-foreground: 40 30% 95%;
-  --secondary: 35 15% 90%;
-  --secondary-foreground: 30 20% 15%;
-  --accent: 35 15% 88%;
-  --accent-foreground: 30 20% 15%;
+  --background: 260 20% 8%;
+  --foreground: 280 100% 90%;
+  --card: 260 20% 10%;
+  --card-foreground: 280 100% 90%;
+  --primary: 290 80% 65%;
+  --primary-foreground: 260 20% 5%;
+  --muted: 260 15% 14%;
+  --muted-foreground: 280 30% 60%;
+  --border: 270 20% 18%;
+  --input: 270 20% 18%;
+  --ring: 290 80% 65%;
+  --destructive: 340 80% 55%;
+  --destructive-foreground: 0 0% 98%;
+  --secondary: 260 15% 12%;
+  --secondary-foreground: 280 100% 90%;
+  --accent: 260 15% 14%;
+  --accent-foreground: 280 100% 90%;
 }
 [data-skin="paper"] body {
   font-family: "Instrument Serif", Georgia, serif;
