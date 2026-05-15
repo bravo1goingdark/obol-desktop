@@ -25,6 +25,15 @@
   let csvExported = false;
   let csvExportTimer: ReturnType<typeof setTimeout> | null = null;
   let showProxy = false;
+  let showInsights = false;
+
+  // Insights icon only appears when there's extra data to show
+  $: hasInsights = $widget.payload && (
+    $widget.payload.anomaly ||
+    ($widget.payload.cache && $widget.payload.cache.savings_cents > 0) ||
+    $widget.payload.forecast?.over_budget_cents ||
+    ($widget.payload.provider_breakdown && $widget.payload.provider_breakdown.length > 0)
+  );
 
   // ── Cost-since-last-open delta ──────────────────────────────────────────
   let deltaCents: number | null = null;
@@ -204,10 +213,31 @@
         <span>Obol</span>
       </div>
       <div class="flex items-center gap-1 pr-2">
+        <!-- Insights toggle (only shows when data available) -->
+        {#if hasInsights}
+          <button
+            type="button"
+            on:click={() => { showInsights = !showInsights; showProxy = false; }}
+            title={showInsights ? "Back to dashboard" : "Insights"}
+            aria-label="Toggle insights"
+            class="flex h-6 w-6 items-center justify-center rounded transition-colors
+              {showInsights ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+          >
+            {#if showInsights}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            {:else}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+              </svg>
+            {/if}
+          </button>
+        {/if}
         <!-- Proxy toggle -->
         <button
           type="button"
-          on:click={() => (showProxy = !showProxy)}
+          on:click={() => { showProxy = !showProxy; showInsights = false; }}
           title={showProxy ? "Back to dashboard" : "Proxy"}
           aria-label="Toggle proxy view"
           class="flex h-6 w-6 items-center justify-center rounded transition-colors
@@ -362,6 +392,67 @@
           </div>
         {/if}
       </div>
+    {:else if showInsights}
+      <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
+        {#if $widget.payload}
+          {@const p = $widget.payload}
+
+          {#if p.cache && p.cache.savings_cents > 0}
+            <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
+              <span class="text-[10px]">💰</span>
+              <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
+                Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
+              </span>
+            </div>
+          {/if}
+
+          {#if p.forecast?.over_budget_cents}
+            <div class="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
+              <span class="text-[10px]">📈</span>
+              <span class="text-[10px] text-amber-600 dark:text-amber-400">
+                Projected to exceed budget by {formatCents(p.forecast.over_budget_cents)}
+              </span>
+            </div>
+          {/if}
+
+          {#if p.provider_breakdown && p.provider_breakdown.length > 0}
+            <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
+              <p class="mb-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">By provider</p>
+              <div class="flex flex-wrap gap-1.5">
+                {#each p.provider_breakdown as prov}
+                  {@const pct = p.month_spend_cents > 0 ? Math.round((prov.cents / p.month_spend_cents) * 100) : 0}
+                  <span class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[9px]">
+                    <span class="h-1.5 w-1.5 rounded-full" style="background: hsl({providerHue(prov.provider)} 60% 50%)"></span>
+                    <span class="font-medium text-foreground">{prov.provider}</span>
+                    <span class="text-muted-foreground">{formatCentsCompact(prov.cents)}</span>
+                    <span class="text-muted-foreground/60">{pct}%</span>
+                  </span>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if p.forecast}
+            <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
+              <p class="mb-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Forecast detail</p>
+              <div class="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p class="font-mono text-sm text-foreground">{formatCentsCompact(p.forecast.daily_average_cents)}</p>
+                  <p class="text-[8px] text-muted-foreground">Avg/day</p>
+                </div>
+                <div>
+                  <p class="font-mono text-sm text-foreground">{p.forecast.days_remaining}d</p>
+                  <p class="text-[8px] text-muted-foreground">Remaining</p>
+                </div>
+                <div>
+                  <p class="font-mono text-sm text-foreground capitalize">{p.forecast.confidence}</p>
+                  <p class="text-[8px] text-muted-foreground">Confidence</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+        {/if}
+      </div>
     {:else}
     <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
       {#if !$widget.payload}
@@ -381,22 +472,12 @@
           </div>
         {/if}
 
-        <!-- Anomaly alert -->
+        <!-- Anomaly alert (stays in main - it's urgent) -->
         {#if p.anomaly}
           <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
             <span class="text-[10px]">⚠️</span>
             <span class="text-[10px] text-destructive">
               Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
-            </span>
-          </div>
-        {/if}
-
-        <!-- Cache savings -->
-        {#if p.cache && p.cache.savings_cents > 0}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
-            <span class="text-[10px]">💰</span>
-            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
-              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
             </span>
           </div>
         {/if}
@@ -462,53 +543,6 @@
               : null}
           />
         </div>
-
-        <!-- Over-budget projection warning -->
-        {#if p.forecast?.over_budget_cents}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
-            <span class="text-[10px]">📈</span>
-            <span class="text-[10px] text-amber-600 dark:text-amber-400">
-              Projected to exceed budget by {formatCents(p.forecast.over_budget_cents)}
-            </span>
-          </div>
-        {/if}
-
-        <!-- Provider breakdown pills -->
-        {#if p.provider_breakdown && p.provider_breakdown.length > 0}
-          <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
-            <p class="mb-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
-              By provider
-            </p>
-            <div class="flex flex-wrap gap-1.5">
-              {#each p.provider_breakdown as prov}
-                {@const pct = p.month_spend_cents > 0 ? Math.round((prov.cents / p.month_spend_cents) * 100) : 0}
-                <span class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[9px]">
-                  <span class="h-1.5 w-1.5 rounded-full" style="background: hsl({providerHue(prov.provider)} 60% 50%)"></span>
-                  <span class="font-medium text-foreground">{prov.provider}</span>
-                  <span class="text-muted-foreground">{formatCentsCompact(prov.cents)}</span>
-                  <span class="text-muted-foreground/60">{pct}%</span>
-                </span>
-              {/each}
-            </div>
-          </div>
-        {:else if p.top_model && p.month_spend_cents > 0}
-          {@const pct = Math.min(100, Math.round((p.top_model.cost_cents / p.month_spend_cents) * 100))}
-          <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
-            <div class="flex items-center justify-between mb-1.5">
-              <span class="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Spend concentration</span>
-              <span class="font-mono text-[9px] text-muted-foreground">{p.active_connections} provider{p.active_connections !== 1 ? 's' : ''}</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <div class="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width: {pct}%"></div>
-              </div>
-              <span class="font-mono text-[10px] text-foreground">{pct}%</span>
-            </div>
-            <p class="mt-1 text-[9px] text-muted-foreground">
-              {p.top_model.display} ({p.top_model.provider}) is {pct}% of your month
-            </p>
-          </div>
-        {/if}
 
         <!-- 14-day sparkline -->
         <div class="mb-3 rounded-lg border border-border bg-card p-4">
