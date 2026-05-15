@@ -14,7 +14,7 @@
     />
     <meta name="author" content="Obol" />
     <meta name="robots" content="index, follow, max-image-preview:large" />
-    <link rel="canonical" href="https://obol-dektop.pages.dev/" />
+    <link rel="canonical" href="https://obol-desktop.pages.dev/" />
 
     <meta property="og:site_name" content="Obol" />
     <meta property="og:title" content="Obol — AI spend, always in sight" />
@@ -23,10 +23,10 @@
       content="Track Claude, OpenAI, and other AI API costs in real time with a lightweight, privacy-first desktop tray widget."
     />
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://obol-dektop.pages.dev/" />
+    <meta property="og:url" content="https://obol-desktop.pages.dev/" />
     <meta
       property="og:image"
-      content="https://obol-dektop.pages.dev/og-image.png"
+      content="https://obol-desktop.pages.dev/og-image.png"
     />
     <meta
       property="og:image:alt"
@@ -41,7 +41,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://obol-dektop.pages.dev/og-image.png"
+      content="https://obol-desktop.pages.dev/og-image.png"
     />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -281,6 +281,18 @@
           0 4px 12px -4px rgba(0, 0, 0, 0.12);
         flex-shrink: 0;
         user-select: none;
+        animation: widget-enter 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+        animation-delay: 0.3s;
+      }
+      @keyframes widget-enter {
+        from {
+          opacity: 0;
+          transform: translateY(24px) scale(0.97);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
       }
       .w-bar {
         display: flex;
@@ -477,6 +489,96 @@
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
         gap: 1rem;
+      }
+
+      .steps-grid {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 1.5rem;
+      }
+      .step {
+        flex: 1;
+        max-width: 240px;
+        text-align: center;
+      }
+      .step-num {
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        border: 1px solid var(--border);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--fg);
+        margin-bottom: 0.75rem;
+      }
+      .step-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.375rem;
+      }
+      .step-desc {
+        font-size: 0.8125rem;
+        color: var(--fg-muted);
+        line-height: 1.5;
+      }
+      .step-arrow {
+        color: var(--fg-muted);
+        font-size: 1.25rem;
+        margin-top: 1rem;
+        flex-shrink: 0;
+      }
+
+      .changelog {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .changelog-entry {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 1rem 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        background: var(--bg-card);
+      }
+      .changelog-tag {
+        font-size: 0.625rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 0.15em 0.5em;
+        border-radius: 0.25rem;
+        flex-shrink: 0;
+        background: hsl(142 60% 45% / 0.1);
+        color: hsl(142 60% 40%);
+      }
+      .changelog-entry:last-child .changelog-tag {
+        background: hsl(210 60% 50% / 0.1);
+        color: hsl(210 60% 45%);
+      }
+      .changelog-text {
+        font-size: 0.875rem;
+        line-height: 1.5;
+        color: var(--fg);
+      }
+      .changelog-text strong {
+        font-weight: 600;
+      }
+
+      @media (max-width: 720px) {
+        .steps-grid {
+          flex-direction: column;
+          align-items: center;
+        }
+        .step-arrow {
+          transform: rotate(90deg);
+          margin-top: 0;
+        }
       }
       .feature {
         padding: 1.5rem;
@@ -918,151 +1020,88 @@
 
       <hr class="section-rule" />
 
+      <section class="section" aria-labelledby="how-heading">
+        <h2 id="how-heading" class="section-label">How it works</h2>
+        <div class="steps-grid">
+          <div class="step">
+            <div class="step-num">1</div>
+            <p class="step-title">Install</p>
+            <p class="step-desc">Download the binary for your OS. Under 10 MB, no runtime deps.</p>
+          </div>
+          <div class="step-arrow" aria-hidden="true">→</div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <p class="step-title">Connect</p>
+            <p class="step-desc">Paste your Obol personal access token. Stored in your OS keychain.</p>
+          </div>
+          <div class="step-arrow" aria-hidden="true">→</div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <p class="step-title">Track</p>
+            <p class="step-desc">Widget polls every 2 min. Mood, spend, and trends — always in your tray.</p>
+          </div>
+        </div>
+      </section>
+
+      <hr class="section-rule" />
+
       <section class="section" aria-labelledby="features-heading">
         <h2 id="features-heading" class="section-label">Features</h2>
         <div class="features-grid">
           <div class="feature">
-            <div
-              class="feature-face"
-              style="
-                animation: mood-glitch 0.4s steps(3, end) infinite;
-                color: var(--destructive);
-              "
-            >
-              (T_T)
-            </div>
+            <div class="feature-face" style="animation: mood-glitch 0.4s steps(3, end) infinite; color: var(--destructive);">(T_T)</div>
             <p class="feature-name">Mood meter</p>
-            <p class="feature-desc">
-              Your spend expressed as a face. From
-              <span style="font-family: monospace">(^_^)</span> to
-              <span style="font-family: monospace">(T_T)</span> — you'll know
-              before you even look.
-            </p>
-          </div>
-
-          <div class="feature">
-            <div
-              class="feature-face"
-              style="animation: mood-breath 4.5s ease-in-out infinite"
-            >
-              ⬛
-            </div>
-            <p class="feature-name">System tray</p>
-            <p class="feature-desc">
-              Lives in your system tray, always visible. No browser tab, no
-              floating window, no friction.
-            </p>
+            <p class="feature-desc">Your spend expressed as a face — from <span style="font-family: monospace">(^_^)</span> to <span style="font-family: monospace">(T_T)</span>. You'll know before you even look.</p>
           </div>
 
           <div class="feature">
             <div class="feature-face">🔔</div>
             <p class="feature-name">Budget alerts</p>
-            <p class="feature-desc">
-              Native OS notifications at 80% and 100% of your monthly budget.
-              Set a daily cap too.
-            </p>
+            <p class="feature-desc">Native OS notifications at 80% and 100% of your monthly budget. Set a daily cap too.</p>
           </div>
 
           <div class="feature">
             <div class="feature-face">📈</div>
             <p class="feature-name">14-day trend</p>
-            <p class="feature-desc">
-              Inline sparkline with hover tooltips so you can tell if today is
-              an outlier or a pattern.
-            </p>
+            <p class="feature-desc">Inline sparkline with hover tooltips and CSV export. Spot patterns at a glance.</p>
           </div>
 
           <div class="feature">
             <div class="feature-face">🔒</div>
             <p class="feature-name">Privacy first</p>
-            <p class="feature-desc">
-              Your API token stays in the OS keychain. No cloud sync, no
-              telemetry, no data leaving your machine.
-            </p>
+            <p class="feature-desc">Token stays in the OS keychain. No cloud sync, no telemetry, no data leaving your machine.</p>
           </div>
 
           <div class="feature">
-            <div class="feature-face">⚡</div>
-            <p class="feature-name">Lightweight</p>
-            <p class="feature-desc">
-              Built with Tauri and Rust. Tiny binary, near-zero idle CPU,
-              configurable 1–15 min poll cadence.
-            </p>
-          </div>
-
-          <div class="feature">
-            <div class="feature-face">📊</div>
-            <p class="feature-name">CSV export</p>
-            <p class="feature-desc">
-              Download your 14-day spending history as a CSV file for your own
-              analysis.
-            </p>
-          </div>
-
-          <div class="feature">
-            <div class="feature-face">🚀</div>
-            <p class="feature-name">Autostart</p>
-            <p class="feature-desc">
-              Automatically launch on system startup so you never miss tracking
-              your spend.
-            </p>
-          </div>
-
-          <div class="feature">
-            <div class="feature-face">📌</div>
-            <p class="feature-name">Always on top</p>
-            <p class="feature-desc">
-              Pin the widget window above other apps for constant visibility.
-              Toggle via menu or settings.
-            </p>
+            <div class="feature-face">🧘</div>
+            <p class="feature-name">Focus mode</p>
+            <p class="feature-desc">One click to mute all notifications and dim the tray. For when you're in flow and don't want budget anxiety.</p>
           </div>
 
           <div class="feature">
             <div class="feature-face">⌨️</div>
-            <p class="feature-name">Global shortcut</p>
-            <p class="feature-desc">
-              Press
-              <kbd
-                style="
-                  font-family: monospace;
-                  background: hsl(0 0%50%/ 0.1);
-                  padding: 0.1em 0.35em;
-                  border-radius: 0.25rem;
-                  font-size: 0.85em;
-                "
-                >Ctrl+Shift+O</kbd
-              >
-              (or
-              <kbd
-                style="
-                  font-family: monospace;
-                  background: hsl(0 0%50%/ 0.1);
-                  padding: 0.1em 0.35em;
-                  border-radius: 0.25rem;
-                  font-size: 0.85em;
-                "
-                >Cmd+Shift+O</kbd
-              >
-              on Mac) from anywhere to toggle the widget.
-            </p>
+            <p class="feature-name">Keyboard driven</p>
+            <p class="feature-desc"><kbd style="font-family:monospace;background:hsl(0 0%50%/0.1);padding:0.1em 0.35em;border-radius:0.25rem;font-size:0.85em">R</kbd> refresh, <kbd style="font-family:monospace;background:hsl(0 0%50%/0.1);padding:0.1em 0.35em;border-radius:0.25rem;font-size:0.85em">C</kbd> copy cost, <kbd style="font-family:monospace;background:hsl(0 0%50%/0.1);padding:0.1em 0.35em;border-radius:0.25rem;font-size:0.85em">Esc</kbd> hide. Global toggle with <kbd style="font-family:monospace;background:hsl(0 0%50%/0.1);padding:0.1em 0.35em;border-radius:0.25rem;font-size:0.85em">Ctrl+Shift+O</kbd>.</p>
           </div>
+        </div>
+      </section>
 
-          <div class="feature">
-            <div class="feature-face">🌐</div>
-            <p class="feature-name">Full dashboard</p>
-            <p class="feature-desc">
-              Click "Open in browser" to view the complete Obol web dashboard
-              with detailed analytics.
-            </p>
+      <hr class="section-rule" />
+
+      <section class="section" aria-labelledby="changelog-heading">
+        <h2 id="changelog-heading" class="section-label">What's new</h2>
+        <div class="changelog">
+          <div class="changelog-entry">
+            <span class="changelog-tag">new</span>
+            <p class="changelog-text"><strong>Focus mode</strong> — mute notifications and dim the tray to "· zen" with one click.</p>
           </div>
-
-          <div class="feature">
-            <div class="feature-face">💾</div>
-            <p class="feature-name">Position memory</p>
-            <p class="feature-desc">
-              Window position is saved and restored on each launch, so it stays
-              where you want it.
-            </p>
+          <div class="changelog-entry">
+            <span class="changelog-tag">new</span>
+            <p class="changelog-text"><strong>Cost delta badge</strong> — see "+$2.34 since you last looked" when you open the widget.</p>
+          </div>
+          <div class="changelog-entry">
+            <span class="changelog-tag">fix</span>
+            <p class="changelog-text"><strong>Hardened runtime</strong> — eliminated unsafe code, fixed notification spam, added screen-bounds validation.</p>
           </div>
         </div>
       </section>
