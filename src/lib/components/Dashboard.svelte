@@ -304,7 +304,7 @@
           <StatCard
             label="Top model"
             value={p.top_model?.display ?? "—"}
-            subtitle={p.top_model ? formatCentsCompact(p.top_model.cost_cents) : null}
+            subtitle={p.top_model ? `${formatCentsCompact(p.top_model.cost_cents)} · ${p.top_model.provider}` : null}
             accent="emerald"
           />
           <StatCard
@@ -317,6 +317,26 @@
               : null}
           />
         </div>
+
+        <!-- Provider concentration bar -->
+        {#if p.top_model && p.month_spend_cents > 0}
+          {@const pct = Math.min(100, Math.round((p.top_model.cost_cents / p.month_spend_cents) * 100))}
+          <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="font-mono text-[9px] uppercase tracking-wider text-muted-foreground">Spend concentration</span>
+              <span class="font-mono text-[9px] text-muted-foreground">{p.active_connections} provider{p.active_connections !== 1 ? 's' : ''}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                <div class="h-full rounded-full bg-emerald-500 transition-all duration-500" style="width: {pct}%"></div>
+              </div>
+              <span class="font-mono text-[10px] text-foreground">{pct}%</span>
+            </div>
+            <p class="mt-1 text-[9px] text-muted-foreground">
+              {p.top_model.display} ({p.top_model.provider}) is {pct}% of your month
+            </p>
+          </div>
+        {/if}
 
         <!-- 14-day sparkline -->
         <div class="mb-3 rounded-lg border border-border bg-card p-4">
