@@ -303,6 +303,26 @@
           </div>
         {/if}
 
+        <!-- Anomaly alert -->
+        {#if p.anomaly}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
+            <span class="text-[10px]">⚠️</span>
+            <span class="text-[10px] text-destructive">
+              Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
+            </span>
+          </div>
+        {/if}
+
+        <!-- Cache savings -->
+        {#if p.cache && p.cache.savings_cents > 0}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
+            <span class="text-[10px]">💰</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
+              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
+            </span>
+          </div>
+        {/if}
+
         <!-- Mood meter -->
         <div class="mb-3 rounded-lg border border-border bg-card p-4">
           <MoodMeter mood={p.mood} />

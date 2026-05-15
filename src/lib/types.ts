@@ -27,11 +27,37 @@ export interface ProxyRequest {
 
 export interface ProxyStats {
   active: boolean;
-  error_rate: number; // 0-100
-  cache_hit_rate: number; // 0-100
+  error_rate: number;
+  cache_hit_rate: number;
   rpm: number;
   total_requests_today: number;
   recent_requests: ProxyRequest[];
+}
+
+export interface PeriodAlertSlot {
+  threshold_cents: number;
+  spent_cents: number;
+  pct: number;
+}
+
+export interface ForecastDetail {
+  projected_total_cents: number;
+  daily_average_cents: number;
+  days_remaining: number;
+  confidence: "low" | "medium" | "high";
+  over_budget_cents: number | null;
+}
+
+export interface CacheStats {
+  hit_rate_pct: number;
+  savings_cents: number;
+  potential_additional_savings_cents: number;
+}
+
+export interface AnomalyInfo {
+  delta_cents: number;
+  median_cents: number;
+  modified_z: number;
 }
 
 export interface WidgetPayload {
@@ -50,6 +76,16 @@ export interface WidgetPayload {
   forecast_month_cents: number | null;
   active_connections: number;
   updated_at: string;
+  // v2 fields
+  provider_breakdown?: Array<{ provider: string; cents: number }>;
+  forecast?: ForecastDetail | null;
+  period_alerts?: {
+    daily: PeriodAlertSlot | null;
+    weekly: PeriodAlertSlot | null;
+    monthly: PeriodAlertSlot | null;
+  };
+  cache?: CacheStats | null;
+  anomaly?: AnomalyInfo | null;
   proxy?: ProxyStats | null;
 }
 
