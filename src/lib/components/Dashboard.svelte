@@ -141,6 +141,43 @@
     if (diff < 0) return `↓ ${pct}% vs ${formatCentsCompact(prev)}`;
     return `= ${formatCentsCompact(prev)}`;
   }
+
+  // ── Cost per hour ───────────────────────────────────────────────────────
+  function costPerHour(todayCents: number): string {
+    const now = new Date();
+    const hours = now.getHours() + now.getMinutes() / 60;
+    if (hours < 0.5) return "—";
+    return formatCents(Math.round(todayCents / hours));
+  }
+
+  // ── Streak counter ──────────────────────────────────────────────────────
+  function computeStreak(series: Array<{ cents: number }>, threshold = 1000): number {
+    let streak = 0;
+    for (let i = series.length - 1; i >= 0; i--) {
+      if (series[i].cents <= threshold) streak++;
+      else break;
+    }
+    return streak;
+  }
+
+  // ── Copy as markdown ────────────────────────────────────────────────────
+  let mdCopied = false;
+  function copyMarkdown(): void {
+    const p = $widget.payload;
+    if (!p) return;
+    const lines = [
+      `**Obol Report** — ${new Date().toLocaleDateString()}`,
+      `- Month: ${formatCents(p.month_spend_cents)}`,
+      `- Today: ${formatCents(p.today_spend_cents)} (${costPerHour(p.today_spend_cents)}/hr)`,
+      `- Budget: ${p.budget_cents > 0 ? `${p.budget_percent.toFixed(0)}% of ${formatCents(p.budget_cents)}` : 'none set'}`,
+      `- Top model: ${p.top_model?.display ?? '—'} (${p.top_model ? formatCents(p.top_model.cost_cents) : '—'})`,
+      `- Forecast: ${p.forecast_month_cents != null ? formatCents(p.forecast_month_cents) : 'N/A'}`,
+      `- Connections: ${p.active_connections}`,
+    ];
+    navigator.clipboard.writeText(lines.join("\n"));
+    mdCopied = true;
+    setTimeout(() => (mdCopied = false), 2000);
+  }
 </script>
 
 {#if showSettings && SettingsPage}
@@ -302,6 +339,7 @@
             label="Today"
             rawCents={p.today_spend_cents}
             accent="muted"
+            subtitle={p.today_spend_cents > 0 ? `${costPerHour(p.today_spend_cents)}/hr` : null}
             copyValue={formatCents(p.today_spend_cents)}
           />
         </div>
@@ -432,10 +470,26 @@
     <div
       class="flex h-7 flex-shrink-0 items-center justify-between border-t border-border px-3 font-mono text-[9px] uppercase tracking-wider text-muted-foreground"
     >
-      <span>
-        {$widget.payload ? `updated ${formatRelative($widget.lastUpdatedAt)}` : "—"}
+      <span class="flex items-center gap-2">
+        {#if $widget.payload}
+          {@const streak = computeStreak($widget.payload.daily_series)}
+          {#if streak >= 2}
+            <span class="text-emerald-500">🔥 {streak}d streak</span>
+            <span>·</span>
+          {/if}
+          <span>{`updated ${formatRelative($widget.lastUpdatedAt)}`}</span>
+        {:else}
+          <span>—</span>
+        {/if}
       </span>
-      <span>{$widget.payload?.active_connections ?? 0} connections</span>
+      <button
+        type="button"
+        on:click={copyMarkdown}
+        title="Copy report as markdown"
+        class="hover:text-foreground transition-colors {mdCopied ? 'text-primary' : ''}"
+      >
+        {mdCopied ? "✓ copied" : "📋 copy"}
+      </button>
     </div>
   </div>
 {/if}

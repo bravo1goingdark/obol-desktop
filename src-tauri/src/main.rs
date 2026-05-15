@@ -346,12 +346,23 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             *state.last_etag.lock().unwrap_or_else(|e| e.into_inner()) = new_etag;
             // Update tray title with mood face + today's spend for at-a-glance UX.
             if let Some(tray) = app.tray_by_id("main") {
-                let label = format!(
-                    "{} {}",
-                    payload.mood.face,
-                    short_cents(payload.today_spend_cents)
-                );
-                let _ = tray.set_title(Some(&label));
+                // Skip tray update in focus mode.
+                if !state.focus_mode.load(Ordering::Relaxed) {
+                    let status = if payload.budget_cents > 0 && payload.budget_percent >= 100.0 {
+                        "🔴"
+                    } else if payload.budget_cents > 0 && payload.budget_percent >= 80.0 {
+                        "🟡"
+                    } else {
+                        "🟢"
+                    };
+                    let label = format!(
+                        "{} {} {}",
+                        status,
+                        payload.mood.face,
+                        short_cents(payload.today_spend_cents)
+                    );
+                    let _ = tray.set_title(Some(&label));
+                }
                 // Tooltip shows the fuller picture without opening the window.
                 let forecast_str = payload
                     .forecast_month_cents
