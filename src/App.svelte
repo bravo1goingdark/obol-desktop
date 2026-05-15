@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { invoke } from "@tauri-apps/api/core";
   import Dashboard from "$lib/components/Dashboard.svelte";
   import SetupScreen from "$lib/components/SetupScreen.svelte";
   import { token } from "$lib/stores/token";
@@ -91,13 +92,34 @@
         );
       }, 300);
     });
+
+    // Idle detection: heartbeat on any user interaction
+    document.addEventListener("pointerdown", heartbeat);
+    document.addEventListener("keydown", heartbeat);
+    window.addEventListener("focus", heartbeat);
+    heartbeat(); // initial heartbeat on mount
   });
+
+  // ── Idle detection heartbeat ─────────────────────────────────────────
+  // Sends a heartbeat to Rust on user activity (throttled to once/60s).
+  // Polling pauses after 10 min of no heartbeat.
+  let lastHeartbeat = 0;
+  function heartbeat(): void {
+    const now = Date.now();
+    if (now - lastHeartbeat > 60_000) {
+      lastHeartbeat = now;
+      invoke("cmd_heartbeat").catch(() => undefined);
+    }
+  }
 
   onDestroy(() => {
     widget.dispose();
     if (unlistenMove) unlistenMove();
     if (unlistenUpdate) unlistenUpdate();
     if (positionSaveTimer) clearTimeout(positionSaveTimer);
+    document.removeEventListener("pointerdown", heartbeat);
+    document.removeEventListener("keydown", heartbeat);
+    window.removeEventListener("focus", heartbeat);
   });
 </script>
 

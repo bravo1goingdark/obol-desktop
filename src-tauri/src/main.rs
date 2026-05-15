@@ -66,6 +66,9 @@ pub struct AppState {
     pub last_etag: Mutex<Option<String>>,
     /// When true, notifications are suppressed and tray label is dimmed.
     pub focus_mode: AtomicBool,
+    /// Unix timestamp (secs) of last user activity. Updated by frontend on
+    /// interaction. Polling is skipped when idle > 10 minutes.
+    pub last_activity: std::sync::atomic::AtomicU64,
 }
 
 impl AppState {
@@ -86,6 +89,12 @@ impl AppState {
             trial_expired: AtomicBool::new(false),
             last_etag: Mutex::new(None),
             focus_mode: AtomicBool::new(false),
+            last_activity: std::sync::atomic::AtomicU64::new(
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            ),
         }
     }
 }
@@ -205,6 +214,17 @@ fn cmd_set_daily_limit(cents: i64, state: State<'_, Arc<AppState>>) {
 }
 
 #[tauri::command]
+fn cmd_heartbeat(state: State<'_, Arc<AppState>>) {
+    state.last_activity.store(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
+        Ordering::Relaxed,
+    );
+}
+
+#[tauri::command]
 fn cmd_set_focus_mode(enabled: bool, app: AppHandle, state: State<'_, Arc<AppState>>) {
     state.focus_mode.store(enabled, Ordering::Relaxed);
     // Dim/restore tray label to signal focus mode visually.
@@ -253,6 +273,19 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             let _ = tray.set_title(Some(&format!("(zZz) {}", last_label)));
         }
         return;
+    }
+
+    // Skip polling when user is idle (no interaction for 10+ minutes).
+    // Resumes automatically on next activity via cmd_heartbeat.
+    {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let last = state.last_activity.load(Ordering::Relaxed);
+        if now.saturating_sub(last) > 600 {
+            return;
+        }
     }
 
     // Stop polling when trial has expired — the user must upgrade or
@@ -711,6 +744,7 @@ fn main() {
             cmd_set_poll_interval,
             cmd_get_daily_limit,
             cmd_set_daily_limit,
+            cmd_heartbeat,
             cmd_set_focus_mode,
         ])
         .setup(move |app| {
