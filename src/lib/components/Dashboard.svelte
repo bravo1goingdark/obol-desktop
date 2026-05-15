@@ -203,16 +203,28 @@
         <Logo size={14} />
         {#if $widget.payload}
           <button type="button" on:click={() => (activeTab = "overview")}
-            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'overview' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
-            Overview
+            title="Overview"
+            aria-label="Overview"
+            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'overview' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
+            </svg>
           </button>
           <button type="button" on:click={() => (activeTab = "insights")}
-            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'insights' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
-            Insights
+            title="Insights"
+            aria-label="Insights"
+            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'insights' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
+            </svg>
           </button>
           <button type="button" on:click={() => (activeTab = "proxy")}
-            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'proxy' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
-            Proxy
+            title="Proxy"
+            aria-label="Proxy"
+            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'proxy' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+            </svg>
           </button>
         {:else}
           <span class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Obol</span>
