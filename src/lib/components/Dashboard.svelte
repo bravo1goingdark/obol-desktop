@@ -162,6 +162,15 @@
 
   // ── Copy as markdown ────────────────────────────────────────────────────
   let mdCopied = false;
+
+  // ── Provider color mapping ──────────────────────────────────────────────
+  function providerHue(provider: string): number {
+    const map: Record<string, number> = {
+      anthropic: 20, openai: 160, google: 45, openrouter: 270,
+      mistral: 210, groq: 330, xai: 0, deepseek: 200, cohere: 140, opencode: 290,
+    };
+    return map[provider.toLowerCase()] ?? (provider.charCodeAt(0) * 37) % 360;
+  }
   function copyMarkdown(): void {
     const p = $widget.payload;
     if (!p) return;
@@ -375,7 +384,9 @@
           <StatCard
             label="Forecast"
             rawCents={p.forecast_month_cents ?? 0}
-            subtitle={p.forecast_month_cents === null ? "pro only" : "month end"}
+            subtitle={p.forecast?.confidence
+              ? `${p.forecast.confidence} · ${p.forecast.days_remaining}d left`
+              : p.forecast_month_cents === null ? "pro only" : "month end"}
             accent={p.forecast_month_cents === null ? "none" : "amber"}
             copyValue={p.forecast_month_cents !== null
               ? formatCents(p.forecast_month_cents)
@@ -383,8 +394,35 @@
           />
         </div>
 
-        <!-- Provider concentration bar -->
-        {#if p.top_model && p.month_spend_cents > 0}
+        <!-- Over-budget projection warning -->
+        {#if p.forecast?.over_budget_cents}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
+            <span class="text-[10px]">📈</span>
+            <span class="text-[10px] text-amber-600 dark:text-amber-400">
+              Projected to exceed budget by {formatCents(p.forecast.over_budget_cents)}
+            </span>
+          </div>
+        {/if}
+
+        <!-- Provider breakdown pills -->
+        {#if p.provider_breakdown && p.provider_breakdown.length > 0}
+          <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
+            <p class="mb-2 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">
+              By provider
+            </p>
+            <div class="flex flex-wrap gap-1.5">
+              {#each p.provider_breakdown as prov}
+                {@const pct = p.month_spend_cents > 0 ? Math.round((prov.cents / p.month_spend_cents) * 100) : 0}
+                <span class="inline-flex items-center gap-1 rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[9px]">
+                  <span class="h-1.5 w-1.5 rounded-full" style="background: hsl({providerHue(prov.provider)} 60% 50%)"></span>
+                  <span class="font-medium text-foreground">{prov.provider}</span>
+                  <span class="text-muted-foreground">{formatCentsCompact(prov.cents)}</span>
+                  <span class="text-muted-foreground/60">{pct}%</span>
+                </span>
+              {/each}
+            </div>
+          </div>
+        {:else if p.top_model && p.month_spend_cents > 0}
           {@const pct = Math.min(100, Math.round((p.top_model.cost_cents / p.month_spend_cents) * 100))}
           <div class="mb-3 rounded-lg border border-border bg-card px-4 py-3">
             <div class="flex items-center justify-between mb-1.5">
