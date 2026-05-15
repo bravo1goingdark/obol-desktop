@@ -6,6 +6,7 @@
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import MiniSparkline from "$lib/components/MiniSparkline.svelte";
   import MoodMeter from "$lib/components/MoodMeter.svelte";
+  import ProxyFeed from "$lib/components/ProxyFeed.svelte";
   import Logo from "$lib/components/Logo.svelte";
   import type SettingsPageType from "$lib/components/SettingsPage.svelte";
   let SettingsPage: typeof SettingsPageType | null = null;
@@ -49,6 +50,12 @@
     focusMode = !focusMode;
     localStorage.setItem("obol_focus_mode", String(focusMode));
     invoke("cmd_set_focus_mode", { enabled: focusMode }).catch(() => undefined);
+  }
+
+  // ── Proxy kill switch ───────────────────────────────────────────────────
+  async function toggleProxy(): Promise<void> {
+    await invoke("cmd_toggle_proxy").catch(() => undefined);
+    widget.refresh();
   }
 
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
@@ -374,6 +381,50 @@
           </div>
           <MiniSparkline data={p.daily_series} />
         </div>
+
+        <!-- Proxy stats -->
+        {#if p.proxy}
+          <div class="mb-3 rounded-lg border border-border bg-card p-4">
+            <div class="mb-2 flex items-center justify-between">
+              <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Proxy</p>
+              <div class="flex items-center gap-2">
+                <span class="flex items-center gap-1 font-mono text-[9px] {p.proxy.error_rate > 10 ? 'text-destructive' : p.proxy.error_rate > 5 ? 'text-amber-500' : 'text-emerald-500'}">
+                  {p.proxy.error_rate > 10 ? '✗' : '✓'} {(100 - p.proxy.error_rate).toFixed(1)}%
+                </span>
+                <button
+                  type="button"
+                  on:click={toggleProxy}
+                  title={p.proxy.active ? "Pause proxy (kill switch)" : "Resume proxy"}
+                  class="rounded px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider transition-colors
+                    {p.proxy.active
+                      ? 'bg-emerald-500/10 text-emerald-500 hover:bg-destructive/10 hover:text-destructive'
+                      : 'bg-destructive/10 text-destructive hover:bg-emerald-500/10 hover:text-emerald-500'}"
+                >
+                  {p.proxy.active ? "LIVE" : "PAUSED"}
+                </button>
+              </div>
+            </div>
+
+            <!-- Metrics row -->
+            <div class="mb-2 grid grid-cols-3 gap-2">
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{p.proxy.rpm}</p>
+                <p class="text-[8px] text-muted-foreground">RPM</p>
+              </div>
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{p.proxy.cache_hit_rate.toFixed(0)}%</p>
+                <p class="text-[8px] text-muted-foreground">Cache hits</p>
+              </div>
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{p.proxy.total_requests_today}</p>
+                <p class="text-[8px] text-muted-foreground">Today</p>
+              </div>
+            </div>
+
+            <!-- Live feed -->
+            <ProxyFeed requests={p.proxy.recent_requests} />
+          </div>
+        {/if}
       {/if}
     </div>
 

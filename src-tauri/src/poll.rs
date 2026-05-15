@@ -10,7 +10,7 @@ const ENDPOINT_PATH: &str = "/api/desktop/widget";
 
 static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
 
-fn get_client() -> &'static reqwest::Client {
+pub fn get_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(5))

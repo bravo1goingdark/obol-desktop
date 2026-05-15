@@ -225,6 +225,22 @@ fn cmd_heartbeat(state: State<'_, Arc<AppState>>) {
 }
 
 #[tauri::command]
+async fn cmd_toggle_proxy() -> Result<(), String> {
+    let Some(token) = load_token_from_keychain() else {
+        return Err("no token".into());
+    };
+    let base_url = poll::default_base_url();
+    let url = format!("{}/api/proxy-keys/toggle", base_url.trim_end_matches('/'));
+    poll::get_client()
+        .post(&url)
+        .bearer_auth(&token)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn cmd_set_focus_mode(enabled: bool, app: AppHandle, state: State<'_, Arc<AppState>>) {
     state.focus_mode.store(enabled, Ordering::Relaxed);
     // Dim/restore tray label to signal focus mode visually.
@@ -745,6 +761,7 @@ fn main() {
             cmd_get_daily_limit,
             cmd_set_daily_limit,
             cmd_heartbeat,
+            cmd_toggle_proxy,
             cmd_set_focus_mode,
         ])
         .setup(move |app| {

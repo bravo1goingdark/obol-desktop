@@ -12,6 +12,28 @@ export interface MoodTier {
   severity: MoodSeverity;
 }
 
+export interface ProxyRequest {
+  id: string;
+  model: string;
+  provider: string;
+  cost_cents: number;
+  latency_ms: number;
+  status_code: number;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  created_at: string;
+}
+
+export interface ProxyStats {
+  active: boolean;
+  error_rate: number; // 0-100
+  cache_hit_rate: number; // 0-100
+  rpm: number;
+  total_requests_today: number;
+  recent_requests: ProxyRequest[];
+}
+
 export interface WidgetPayload {
   month_spend_cents: number;
   prev_month_spend_cents: number;
@@ -28,6 +50,7 @@ export interface WidgetPayload {
   forecast_month_cents: number | null;
   active_connections: number;
   updated_at: string;
+  proxy?: ProxyStats | null;
 }
 
 export type ApiErrorKind =
