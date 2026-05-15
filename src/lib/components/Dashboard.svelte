@@ -201,6 +201,10 @@
         class="flex flex-1 items-center gap-2 px-3"
       >
         <Logo size={14} />
+        <span class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Obol</span>
+      </div>
+      <div class="flex items-center gap-1 pr-2">
+        <!-- Tab icons -->
         {#if $widget.payload}
           <button type="button" on:click={() => (activeTab = "overview")}
             title="Overview"
@@ -226,11 +230,8 @@
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
           </button>
-        {:else}
-          <span class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Obol</span>
+          <div class="mx-0.5 h-3 w-px bg-border"></div>
         {/if}
-      </div>
-      <div class="flex items-center gap-1 pr-2">
         <!-- Refresh -->
         <button
           type="button"
