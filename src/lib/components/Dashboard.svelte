@@ -323,7 +323,7 @@
     {/if}
 
     <!-- Scroll container -->
-    <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
+    <div class="min-h-0 flex-1 overflow-y-auto p-4 pb-2 scroll-hidden">
       {#if !$widget.payload}
         <div class="flex h-full items-center justify-center">
           <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
