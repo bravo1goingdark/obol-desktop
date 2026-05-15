@@ -408,24 +408,6 @@
         <!-- ═══ INSIGHTS TAB ═══ -->
         {:else if activeTab === "insights"}
 
-        <!-- Delta badge -->
-        {#if deltaVisible && deltaCents && deltaCents > 0}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
-            <span class="font-mono text-[10px] text-primary">+{formatCents(deltaCents)}</span>
-            <span class="text-[10px] text-muted-foreground">since you last looked</span>
-          </div>
-        {/if}
-
-        <!-- Anomaly alert -->
-        {#if p.anomaly}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
-            <span class="text-[10px]">⚠️</span>
-            <span class="text-[10px] text-destructive">
-              Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
-            </span>
-          </div>
-        {/if}
-
         <!-- Cache savings -->
         {#if p.cache && p.cache.savings_cents > 0}
           <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
