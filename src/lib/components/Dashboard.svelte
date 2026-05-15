@@ -24,7 +24,7 @@
   let showSettings = false;
   let csvExported = false;
   let csvExportTimer: ReturnType<typeof setTimeout> | null = null;
-  let activeTab: "overview" | "insights" | "proxy" = "overview";
+  let showProxy = false;
 
   // ── Cost-since-last-open delta ──────────────────────────────────────────
   let deltaCents: number | null = null;
@@ -198,40 +198,25 @@
     <div class="flex h-8 flex-shrink-0 items-center border-b border-border">
       <div
         data-tauri-drag-region
-        class="flex flex-1 items-center gap-2 px-3"
+        class="flex flex-1 items-center gap-2 px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
       >
         <Logo size={14} />
-        <span class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Obol</span>
+        <span>Obol</span>
       </div>
       <div class="flex items-center gap-1 pr-2">
-        <!-- Tab icons -->
-        {#if $widget.payload}
-          <button type="button" on:click={() => (activeTab = "overview")}
-            title="Overview"
-            aria-label="Overview"
-            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'overview' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /><rect x="14" y="14" width="7" height="7" />
-            </svg>
-          </button>
-          <button type="button" on:click={() => (activeTab = "insights")}
-            title="Insights"
-            aria-label="Insights"
-            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'insights' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
-            </svg>
-          </button>
-          <button type="button" on:click={() => (activeTab = "proxy")}
-            title="Proxy"
-            aria-label="Proxy"
-            class="flex h-6 w-6 items-center justify-center rounded transition-colors {activeTab === 'proxy' ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-            </svg>
-          </button>
-          <div class="mx-0.5 h-3 w-px bg-border"></div>
-        {/if}
+        <!-- Proxy toggle -->
+        <button
+          type="button"
+          on:click={() => (showProxy = !showProxy)}
+          title={showProxy ? "Back to dashboard" : "Proxy"}
+          aria-label="Toggle proxy view"
+          class="flex h-6 w-6 items-center justify-center rounded transition-colors
+            {showProxy ? 'text-foreground bg-muted' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+        </button>
         <!-- Refresh -->
         <button
           type="button"
@@ -323,7 +308,56 @@
     {/if}
 
     <!-- Scroll container -->
-    <div class="min-h-0 flex-1 overflow-y-auto p-4 pb-2 scroll-hidden">
+    {#if showProxy}
+      <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
+        {#if $widget.payload?.proxy}
+          {@const px = $widget.payload.proxy}
+          <div class="mb-3 rounded-lg border border-border bg-card p-4">
+            <div class="mb-2 flex items-center justify-between">
+              <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Proxy</p>
+              <div class="flex items-center gap-2">
+                <span class="flex items-center gap-1 font-mono text-[9px] {px.error_rate > 10 ? 'text-destructive' : px.error_rate > 5 ? 'text-amber-500' : 'text-emerald-500'}">
+                  {px.error_rate > 10 ? '✗' : '✓'} {(100 - px.error_rate).toFixed(1)}%
+                </span>
+                <button
+                  type="button"
+                  on:click={toggleProxy}
+                  title={px.active ? "Pause proxy (kill switch)" : "Resume proxy"}
+                  class="rounded px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider transition-colors
+                    {px.active
+                      ? 'bg-emerald-500/10 text-emerald-500 hover:bg-destructive/10 hover:text-destructive'
+                      : 'bg-destructive/10 text-destructive hover:bg-emerald-500/10 hover:text-emerald-500'}"
+                >
+                  {px.active ? "LIVE" : "PAUSED"}
+                </button>
+              </div>
+            </div>
+            <div class="mb-2 grid grid-cols-3 gap-2">
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{px.rpm}</p>
+                <p class="text-[8px] text-muted-foreground">RPM</p>
+              </div>
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{px.cache_hit_rate.toFixed(0)}%</p>
+                <p class="text-[8px] text-muted-foreground">Cache hits</p>
+              </div>
+              <div class="text-center">
+                <p class="font-mono text-sm text-foreground">{px.total_requests_today}</p>
+                <p class="text-[8px] text-muted-foreground">Today</p>
+              </div>
+            </div>
+            <ProxyFeed requests={px.recent_requests} />
+          </div>
+        {:else}
+          <div class="flex h-full items-center justify-center">
+            <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+              No proxy data — route calls through Obol to see stats
+            </p>
+          </div>
+        {/if}
+      </div>
+    {:else}
+    <div class="flex-1 overflow-y-auto p-4 scroll-hidden">
       {#if !$widget.payload}
         <div class="flex h-full items-center justify-center">
           <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -333,9 +367,6 @@
       {:else}
         {@const p = $widget.payload}
 
-        <!-- ═══ OVERVIEW TAB ═══ -->
-        {#if activeTab === "overview"}
-
         <!-- Cost since last open delta badge -->
         {#if deltaVisible && deltaCents && deltaCents > 0}
           <div class="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
@@ -344,12 +375,22 @@
           </div>
         {/if}
 
-        <!-- Anomaly alert (shown in Overview too since it's urgent) -->
+        <!-- Anomaly alert -->
         {#if p.anomaly}
           <div class="mb-3 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-1.5">
             <span class="text-[10px]">⚠️</span>
             <span class="text-[10px] text-destructive">
               Today is {formatCents(p.anomaly.delta_cents)} above your typical {formatCents(p.anomaly.median_cents)}/day
+            </span>
+          </div>
+        {/if}
+
+        <!-- Cache savings -->
+        {#if p.cache && p.cache.savings_cents > 0}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
+            <span class="text-[10px]">💰</span>
+            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
+              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
             </span>
           </div>
         {/if}
@@ -394,42 +435,6 @@
             copyValue={formatCents(p.today_spend_cents)}
           />
         </div>
-
-        <!-- 14-day sparkline (in Overview) -->
-        <div class="rounded-lg border border-border bg-card p-4">
-          <div class="mb-2 flex items-center justify-between">
-            <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Last 14 days
-            </p>
-            {#if p.daily_series.length > 0}
-              <button
-                type="button"
-                on:click={() => exportCsv(p.daily_series)}
-                title="Export CSV"
-                class="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors
-                  {csvExported
-                    ? 'text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
-              >
-                {csvExported ? "✓ Exported" : "CSV ↓"}
-              </button>
-            {/if}
-          </div>
-          <MiniSparkline data={p.daily_series} />
-        </div>
-
-        <!-- ═══ INSIGHTS TAB ═══ -->
-        {:else if activeTab === "insights"}
-
-        <!-- Cache savings -->
-        {#if p.cache && p.cache.savings_cents > 0}
-          <div class="mb-3 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5">
-            <span class="text-[10px]">💰</span>
-            <span class="text-[10px] text-emerald-600 dark:text-emerald-400">
-              Cache saved {formatCents(p.cache.savings_cents)} this month ({p.cache.hit_rate_pct.toFixed(0)}% hit rate)
-            </span>
-          </div>
-        {/if}
 
         <!-- Top model + forecast -->
         <div class="mb-3 grid grid-cols-2 gap-3">
@@ -499,61 +504,46 @@
           </div>
         {/if}
 
-        <!-- ═══ PROXY TAB ═══ -->
-        {:else if activeTab === "proxy"}
-
-        {#if p.proxy}
-          <div class="mb-3 rounded-lg border border-border bg-card p-4">
-            <div class="mb-2 flex items-center justify-between">
-              <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Proxy</p>
-              <div class="flex items-center gap-2">
-                <span class="flex items-center gap-1 font-mono text-[9px] {p.proxy.error_rate > 10 ? 'text-destructive' : p.proxy.error_rate > 5 ? 'text-amber-500' : 'text-emerald-500'}">
-                  {p.proxy.error_rate > 10 ? '✗' : '✓'} {(100 - p.proxy.error_rate).toFixed(1)}%
-                </span>
-                <button
-                  type="button"
-                  on:click={toggleProxy}
-                  title={p.proxy.active ? "Pause proxy (kill switch)" : "Resume proxy"}
-                  class="rounded px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-wider transition-colors
-                    {p.proxy.active
-                      ? 'bg-emerald-500/10 text-emerald-500 hover:bg-destructive/10 hover:text-destructive'
-                      : 'bg-destructive/10 text-destructive hover:bg-emerald-500/10 hover:text-emerald-500'}"
-                >
-                  {p.proxy.active ? "LIVE" : "PAUSED"}
-                </button>
-              </div>
-            </div>
-
-            <!-- Metrics row -->
-            <div class="mb-2 grid grid-cols-3 gap-2">
-              <div class="text-center">
-                <p class="font-mono text-sm text-foreground">{p.proxy.rpm}</p>
-                <p class="text-[8px] text-muted-foreground">RPM</p>
-              </div>
-              <div class="text-center">
-                <p class="font-mono text-sm text-foreground">{p.proxy.cache_hit_rate.toFixed(0)}%</p>
-                <p class="text-[8px] text-muted-foreground">Cache hits</p>
-              </div>
-              <div class="text-center">
-                <p class="font-mono text-sm text-foreground">{p.proxy.total_requests_today}</p>
-                <p class="text-[8px] text-muted-foreground">Today</p>
-              </div>
-            </div>
-
-            <!-- Live feed -->
-            <ProxyFeed requests={p.proxy.recent_requests} />
-          </div>
-        {:else}
-          <div class="flex h-full items-center justify-center">
+        <!-- 14-day sparkline -->
+        <div class="mb-3 rounded-lg border border-border bg-card p-4">
+          <div class="mb-2 flex items-center justify-between">
             <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              No proxy data — route calls through Obol to see stats
+              Last 14 days
             </p>
+            {#if p.daily_series.length > 0}
+              <button
+                type="button"
+                on:click={() => exportCsv(p.daily_series)}
+                title="Export CSV"
+                class="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors
+                  {csvExported
+                    ? 'text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+              >
+                {#if csvExported}
+                  <!-- Checkmark -->
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Exported
+                {:else}
+                  <!-- Download icon -->
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                  CSV
+                {/if}
+              </button>
+            {/if}
           </div>
-        {/if}
+          <MiniSparkline data={p.daily_series} />
+        </div>
 
-        {/if}
       {/if}
     </div>
+    {/if}
 
     <!-- Footer -->
     <div
