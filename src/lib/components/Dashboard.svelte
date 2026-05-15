@@ -198,10 +198,25 @@
     <div class="flex h-8 flex-shrink-0 items-center border-b border-border">
       <div
         data-tauri-drag-region
-        class="flex flex-1 items-center gap-2 px-3 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
+        class="flex flex-1 items-center gap-2 px-3"
       >
         <Logo size={14} />
-        <span>Obol</span>
+        {#if $widget.payload}
+          <button type="button" on:click={() => (activeTab = "overview")}
+            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'overview' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
+            Overview
+          </button>
+          <button type="button" on:click={() => (activeTab = "insights")}
+            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'insights' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
+            Insights
+          </button>
+          <button type="button" on:click={() => (activeTab = "proxy")}
+            class="font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'proxy' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}">
+            Proxy
+          </button>
+        {:else}
+          <span class="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Obol</span>
+        {/if}
       </div>
       <div class="flex items-center gap-1 pr-2">
         <!-- Refresh -->
@@ -291,24 +306,6 @@
     {#if $widget.error}
       <div class="flex-shrink-0 pt-2">
         <ErrorBanner kind={$widget.error} />
-      </div>
-    {/if}
-
-    <!-- Tab bar -->
-    {#if $widget.payload}
-      <div class="flex h-7 flex-shrink-0 items-center gap-0 border-b border-border px-3">
-        <button type="button" on:click={() => (activeTab = "overview")}
-          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'overview' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
-          Overview
-        </button>
-        <button type="button" on:click={() => (activeTab = "insights")}
-          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'insights' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
-          Insights
-        </button>
-        <button type="button" on:click={() => (activeTab = "proxy")}
-          class="px-2.5 py-1 font-mono text-[9px] uppercase tracking-wider transition-colors {activeTab === 'proxy' ? 'text-foreground border-b border-foreground' : 'text-muted-foreground hover:text-foreground'}">
-          Proxy
-        </button>
       </div>
     {/if}
 
