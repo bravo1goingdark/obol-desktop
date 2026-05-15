@@ -49,9 +49,12 @@ pub struct AppState {
     pub poll_interval_secs: Mutex<u64>,
     /// Daily spend cap in cents (0 = disabled). Writable at runtime.
     pub daily_limit_cents: Mutex<i64>,
-    /// True once we've fired the daily-limit notification; reset when spend
-    /// drops back below the limit (e.g. on the next calendar day).
+    /// True once we've fired the daily-limit notification; reset when a
+    /// new calendar day begins (detected by comparing the date in the payload).
     pub daily_alert_fired: Mutex<bool>,
+    /// The date string (YYYY-MM-DD) of the last poll that set daily_alert_fired.
+    /// Used to reset the flag on day rollover instead of on spend fluctuation.
+    pub last_daily_date: Mutex<String>,
     /// When true, the poll loop skips fetching and leaves the last payload
     /// visible. Set via the "Pause polling" tray item.
     pub paused: AtomicBool,
@@ -61,6 +64,8 @@ pub struct AppState {
     /// Last ETag value returned by the widget endpoint. Sent as
     /// `If-None-Match` on the next poll so unchanged payloads return 304.
     pub last_etag: Mutex<Option<String>>,
+    /// When true, notifications are suppressed and tray label is dimmed.
+    pub focus_mode: AtomicBool,
 }
 
 impl AppState {
@@ -76,9 +81,11 @@ impl AppState {
             poll_interval_secs: Mutex::new(DEFAULT_POLL_INTERVAL_SECS),
             daily_limit_cents: Mutex::new(0),
             daily_alert_fired: Mutex::new(false),
+            last_daily_date: Mutex::new(String::new()),
             paused: AtomicBool::new(false),
             trial_expired: AtomicBool::new(false),
             last_etag: Mutex::new(None),
+            focus_mode: AtomicBool::new(false),
         }
     }
 }
@@ -96,12 +103,10 @@ fn load_token_from_keychain() -> Option<String> {
 // ---------- Tauri commands ----------
 
 #[tauri::command]
-fn cmd_save_token(token: String, state: State<'_, AppState>) -> Result<(), String> {
+fn cmd_save_token(token: String, state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let entry = keyring_entry()?;
     entry.set_password(&token).map_err(|e| e.to_string())?;
-    // Clear trial-expired flag so the poller resumes with the new token.
     state.trial_expired.store(false, Ordering::Relaxed);
-    // Kick the poller so the UI updates immediately.
     state.refresh.notify_one();
     Ok(())
 }
@@ -112,17 +117,16 @@ fn cmd_load_token() -> Option<String> {
 }
 
 #[tauri::command]
-fn cmd_delete_token(state: State<'_, AppState>) -> Result<(), String> {
+fn cmd_delete_token(state: State<'_, Arc<AppState>>) -> Result<(), String> {
     let entry = keyring_entry()?;
-    // delete_credential errors if the entry doesn't exist; swallow that.
     let _ = entry.delete_credential();
-    *state.last.lock().unwrap() = None;
+    *state.last.lock().unwrap_or_else(|e| e.into_inner()) = None;
     state.refresh.notify_one();
     Ok(())
 }
 
 #[tauri::command]
-fn cmd_refresh_now(state: State<'_, AppState>) {
+fn cmd_refresh_now(state: State<'_, Arc<AppState>>) {
     state.refresh.notify_one();
 }
 
@@ -143,16 +147,18 @@ fn cmd_set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn cmd_toggle_always_on_top(app: AppHandle, state: State<'_, AppState>) -> bool {
+fn cmd_toggle_always_on_top(app: AppHandle, state: State<'_, Arc<AppState>>) -> bool {
     let new_aot = {
-        let mut aot = state.always_on_top.lock().unwrap();
+        let mut aot = state
+            .always_on_top
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         *aot = !*aot;
         *aot
     };
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.set_always_on_top(new_aot);
     }
-    // Sync the tray checkmark.
     if let Ok(guard) = state.aot_item.lock() {
         if let Some(ref item) = *guard {
             let _ = item.set_checked(new_aot);
@@ -162,28 +168,63 @@ fn cmd_toggle_always_on_top(app: AppHandle, state: State<'_, AppState>) -> bool 
 }
 
 #[tauri::command]
-fn cmd_get_poll_interval(state: State<'_, AppState>) -> u64 {
-    *state.poll_interval_secs.lock().unwrap()
+fn cmd_get_poll_interval(state: State<'_, Arc<AppState>>) -> u64 {
+    *state
+        .poll_interval_secs
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 #[tauri::command]
-fn cmd_set_poll_interval(secs: u64, state: State<'_, AppState>) {
-    *state.poll_interval_secs.lock().unwrap() = secs.clamp(60, 900);
-    // Wake the sleeping poll loop so the new interval takes effect immediately.
+fn cmd_set_poll_interval(secs: u64, state: State<'_, Arc<AppState>>) {
+    *state
+        .poll_interval_secs
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = secs.clamp(60, 900);
     state.refresh.notify_one();
 }
 
 #[tauri::command]
-fn cmd_get_daily_limit(state: State<'_, AppState>) -> i64 {
-    *state.daily_limit_cents.lock().unwrap()
+fn cmd_get_daily_limit(state: State<'_, Arc<AppState>>) -> i64 {
+    *state
+        .daily_limit_cents
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
 }
 
 #[tauri::command]
-fn cmd_set_daily_limit(cents: i64, state: State<'_, AppState>) {
-    *state.daily_limit_cents.lock().unwrap() = cents.max(0);
-    // Reset the fired flag whenever the limit changes so a new threshold
-    // can immediately fire if today's spend already exceeds it.
-    *state.daily_alert_fired.lock().unwrap() = false;
+fn cmd_set_daily_limit(cents: i64, state: State<'_, Arc<AppState>>) {
+    *state
+        .daily_limit_cents
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = cents.max(0);
+    *state
+        .daily_alert_fired
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = false;
+}
+
+#[tauri::command]
+fn cmd_set_focus_mode(enabled: bool, app: AppHandle, state: State<'_, Arc<AppState>>) {
+    state.focus_mode.store(enabled, Ordering::Relaxed);
+    // Dim/restore tray label to signal focus mode visually.
+    if let Some(tray) = app.tray_by_id("main") {
+        if enabled {
+            let _ = tray.set_title(Some("· zen"));
+        } else {
+            // Restore normal label from last payload.
+            let label = state
+                .last
+                .lock()
+                .ok()
+                .and_then(|g| {
+                    g.as_ref()
+                        .map(|p| format!("{} {}", p.mood.face, short_cents(p.today_spend_cents)))
+                })
+                .unwrap_or_else(|| "Obol".to_string());
+            let _ = tray.set_title(Some(&label));
+        }
+    }
 }
 
 // ---------- Background polling task ----------
@@ -225,13 +266,17 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         return;
     };
     let base_url = default_base_url();
-    let etag = state.last_etag.lock().unwrap().clone();
+    let etag = state
+        .last_etag
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
     match fetch_widget(&base_url, &token, etag.as_deref()).await {
         Ok(None) => {
             // 304 Not Modified — payload unchanged. Just refresh the
             // tray tooltip timestamp so the user sees the poll is alive.
             if let Some(tray) = app.tray_by_id("main") {
-                if let Some(ref payload) = *state.last.lock().unwrap() {
+                if let Some(ref payload) = *state.last.lock().unwrap_or_else(|e| e.into_inner()) {
                     let forecast_str = payload
                         .forecast_month_cents
                         .map(short_cents)
@@ -249,7 +294,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         }
         Ok(Some((payload, new_etag))) => {
             // Store the new ETag for the next conditional request.
-            *state.last_etag.lock().unwrap() = new_etag;
+            *state.last_etag.lock().unwrap_or_else(|e| e.into_inner()) = new_etag;
             // Update tray title with mood face + today's spend for at-a-glance UX.
             if let Some(tray) = app.tray_by_id("main") {
                 let label = format!(
@@ -274,9 +319,13 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             }
 
             // Budget threshold notifications — fire once per crossing per session.
-            if payload.budget_cents > 0 {
+            // Suppressed in focus mode.
+            if payload.budget_cents > 0 && !state.focus_mode.load(Ordering::Relaxed) {
                 let pct = payload.budget_percent;
-                let mut last_thresh = state.last_notified_threshold.lock().unwrap();
+                let mut last_thresh = state
+                    .last_notified_threshold
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
 
                 if pct >= 100.0 && *last_thresh < 100 {
                     *last_thresh = 100;
@@ -306,15 +355,39 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                         ))
                         .show();
                 } else if pct < 80.0 {
-                    // Reset so the next crossing fires a fresh notification.
-                    *last_thresh = 0;
+                    // Only reset at the start of a new billing month (when
+                    // month_spend drops). Don't reset on minor fluctuations.
+                    if payload.month_spend_cents == 0 {
+                        *last_thresh = 0;
+                    }
                 }
             }
 
-            // Daily spend limit notification.
-            let daily_limit = *state.daily_limit_cents.lock().unwrap();
-            if daily_limit > 0 {
-                let mut fired = state.daily_alert_fired.lock().unwrap();
+            // Daily spend limit notification. Suppressed in focus mode.
+            let daily_limit = *state
+                .daily_limit_cents
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if daily_limit > 0 && !state.focus_mode.load(Ordering::Relaxed) {
+                // Reset the fired flag on day rollover (new date in payload).
+                let today = &payload.updated_at[..10]; // "YYYY-MM-DD"
+                {
+                    let mut last_date = state
+                        .last_daily_date
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if last_date.as_str() != today {
+                        *last_date = today.to_string();
+                        *state
+                            .daily_alert_fired
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner()) = false;
+                    }
+                }
+                let mut fired = state
+                    .daily_alert_fired
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
                 if payload.today_spend_cents >= daily_limit && !*fired {
                     *fired = true;
                     drop(fired);
@@ -328,12 +401,10 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                             short_cents(daily_limit),
                         ))
                         .show();
-                } else if payload.today_spend_cents < daily_limit {
-                    *fired = false;
                 }
             }
 
-            *state.last.lock().unwrap() = Some(payload.clone());
+            *state.last.lock().unwrap_or_else(|e| e.into_inner()) = Some(payload.clone());
 
             // Enable the "Copy today's cost" tray item — first successful
             // poll means we have something worth copying.
@@ -353,7 +424,7 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         }
         Err(poll::PollError::TrialExpired(payload)) => {
             eprintln!("poll failed: trial expired");
-            *state.last_etag.lock().unwrap() = None;
+            *state.last_etag.lock().unwrap_or_else(|e| e.into_inner()) = None;
             state.trial_expired.store(true, Ordering::Relaxed);
             let _ = app.emit("widget-trial-expired", &payload);
             let _ = app.emit("widget-error", "trial_expired");
@@ -361,28 +432,27 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
         Err(err) => {
             eprintln!("poll failed: {}", err);
             // Clear the ETag so the next poll does a full fetch.
-            *state.last_etag.lock().unwrap() = None;
+            *state.last_etag.lock().unwrap_or_else(|e| e.into_inner()) = None;
             let _ = app.emit("widget-error", err.tag());
         }
     }
 }
 
 fn spawn_poll_task(app: AppHandle) {
-    let state = app.state::<AppState>().inner() as *const AppState;
-    // SAFETY: AppState lives for the duration of the Tauri app. The app
-    // handle we hold keeps it alive. Only &AppState is used inside the task.
-    let state: &'static AppState = unsafe { &*state };
+    let state: Arc<AppState> = (*app.state::<Arc<AppState>>().inner()).clone();
     let refresh = state.refresh.clone();
     tauri::async_runtime::spawn(async move {
-        // Kick an initial poll immediately on startup.
-        poll_once(&app, state).await;
+        poll_once(&app, &state).await;
         loop {
-            let interval = *state.poll_interval_secs.lock().unwrap();
+            let interval = *state
+                .poll_interval_secs
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             tokio::select! {
                 _ = tokio::time::sleep(Duration::from_secs(interval)) => {}
                 _ = refresh.notified() => {}
             }
-            poll_once(&app, state).await;
+            poll_once(&app, &state).await;
         }
     });
 }
@@ -445,13 +515,21 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let disconnect = MenuItemBuilder::with_id("disconnect", "Disconnect / Sign out").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit Obol").build(app)?;
 
-    let state = app.state::<AppState>();
-    state.aot_item.lock().unwrap().replace(aot.clone());
-    state.pause_item.lock().unwrap().replace(pause.clone());
+    let state = app.state::<Arc<AppState>>();
+    state
+        .aot_item
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .replace(aot.clone());
+    state
+        .pause_item
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .replace(pause.clone());
     state
         .copy_today_item
         .lock()
-        .unwrap()
+        .unwrap_or_else(|e| e.into_inner())
         .replace(copy_today.clone());
 
     MenuBuilder::new(app)
@@ -472,12 +550,12 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "refresh" => {
-            if let Some(state) = app.try_state::<AppState>() {
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
                 state.refresh.notify_one();
             }
         }
         "copy_today" => {
-            if let Some(state) = app.try_state::<AppState>() {
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
                 let value = state
                     .last
                     .lock()
@@ -499,7 +577,7 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "pause" => {
-            if let Some(state) = app.try_state::<AppState>() {
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
                 // Flip the atomic and update the menu-item label to reflect
                 // the new state. The poll loop picks up the flag on its
                 // next iteration (or immediately, on the resume notify).
@@ -533,9 +611,12 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             }
         }
         "always_on_top" => {
-            if let Some(state) = app.try_state::<AppState>() {
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
                 let new_aot = {
-                    let mut aot = state.always_on_top.lock().unwrap();
+                    let mut aot = state
+                        .always_on_top
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
                     *aot = !*aot;
                     *aot
                 };
@@ -557,8 +638,8 @@ fn handle_menu_event(app: &AppHandle, event: MenuEvent) {
             if let Ok(entry) = keyring_entry() {
                 let _ = entry.delete_credential();
             }
-            if let Some(state) = app.try_state::<AppState>() {
-                *state.last.lock().unwrap() = None;
+            if let Some(state) = app.try_state::<Arc<AppState>>() {
+                *state.last.lock().unwrap_or_else(|e| e.into_inner()) = None;
                 state.refresh.notify_one();
             }
             if let Some(window) = app.get_webview_window("main") {
@@ -617,7 +698,7 @@ fn main() {
                 })
                 .build(),
         )
-        .manage(AppState::new())
+        .manage(Arc::new(AppState::new()))
         .invoke_handler(tauri::generate_handler![
             cmd_save_token,
             cmd_load_token,
@@ -630,6 +711,7 @@ fn main() {
             cmd_set_poll_interval,
             cmd_get_daily_limit,
             cmd_set_daily_limit,
+            cmd_set_focus_mode,
         ])
         .setup(move |app| {
             // Register the global toggle shortcut.

@@ -40,8 +40,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["Inter", "ui-sans-serif", "system-ui"],
-        // JetBrains Mono dropped — system monospace is indistinguishable at
-        // the 9-11 px sizes this app uses and saves the entire font download.
+        display: ["'Instrument Serif'", "Georgia", "serif"],
         mono: ["ui-monospace", "monospace"],
       },
       borderRadius: {

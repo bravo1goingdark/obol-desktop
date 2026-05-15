@@ -57,12 +57,25 @@
 
     const win = getCurrentWindow();
 
-    // Restore saved position.
+    // Restore saved position (validated against current monitors).
     const saved = localStorage.getItem("window_pos");
     if (saved) {
       try {
         const { x, y } = JSON.parse(saved) as { x: number; y: number };
-        await win.setPosition(new LogicalPosition(x, y));
+        const { availableMonitors } = await import("@tauri-apps/api/window");
+        const monitors = await availableMonitors();
+        const inBounds = monitors.some((m) => {
+          const mx = m.position.x;
+          const my = m.position.y;
+          const mw = m.size.width / m.scaleFactor;
+          const mh = m.size.height / m.scaleFactor;
+          return x >= mx - 50 && x < mx + mw && y >= my - 50 && y < my + mh;
+        });
+        if (inBounds) {
+          await win.setPosition(new LogicalPosition(x, y));
+        } else {
+          localStorage.removeItem("window_pos");
+        }
       } catch {
         // Stale or malformed — ignore.
       }

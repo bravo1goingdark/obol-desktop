@@ -28,14 +28,14 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://useobol.pages.dev https://useobol.com https://obol-dektop.pages.dev https://github.com https://objects.githubusercontent.com http://localhost:5173; img-src 'self' data:; script-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' https://useobol.pages.dev https://useobol.com https://obol-desktop.pages.dev https://github.com https://objects.githubusercontent.com http://localhost:5173; img-src 'self' data:; script-src 'self'"
     }
   },
   "plugins": {
     "updater": {
       "active": false,
       "endpoints": [
-        "https://obol-dektop.pages.dev/updates/{{target}}-{{arch}}/{{current_version}}"
+        "https://obol-desktop.pages.dev/updates/{{target}}-{{arch}}/{{current_version}}"
       ],
       "pubkey": "REPLACE_WITH_OUTPUT_OF_cargo_tauri_signer_generate",
       "windows": { "installMode": "passive" }
@@ -43,11 +43,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "rpm"],
+    "targets": ["deb", "appimage", "rpm", "dmg", "msi", "nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
       "icons/icon.png"
     ],
     "copyright": "© 2026 Obol",

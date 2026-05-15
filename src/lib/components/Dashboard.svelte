@@ -1,13 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { openUrl } from "@tauri-apps/plugin-opener";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import ErrorBanner from "$lib/components/ErrorBanner.svelte";
   import MiniSparkline from "$lib/components/MiniSparkline.svelte";
   import MoodMeter from "$lib/components/MoodMeter.svelte";
   import Logo from "$lib/components/Logo.svelte";
-  // SettingsPage is lazy-loaded on first click so it never inflates the
-  // initial JS chunk for users who never open settings.
   import type SettingsPageType from "$lib/components/SettingsPage.svelte";
   let SettingsPage: typeof SettingsPageType | null = null;
   async function openSettings(): Promise<void> {
@@ -25,11 +24,57 @@
   let csvExported = false;
   let csvExportTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // ── Cost-since-last-open delta ──────────────────────────────────────────
+  let deltaCents: number | null = null;
+  let deltaVisible = false;
+
+  function computeDelta(currentCents: number): void {
+    const key = "obol_last_seen_today_cents";
+    const prev = localStorage.getItem(key);
+    if (prev !== null) {
+      const diff = currentCents - parseInt(prev, 10);
+      if (diff > 0) {
+        deltaCents = diff;
+        deltaVisible = true;
+        setTimeout(() => (deltaVisible = false), 5000);
+      }
+    }
+    localStorage.setItem(key, String(currentCents));
+  }
+
+  // ── Focus / DND mode ────────────────────────────────────────────────────
+  let focusMode = localStorage.getItem("obol_focus_mode") === "true";
+
+  function toggleFocus(): void {
+    focusMode = !focusMode;
+    localStorage.setItem("obol_focus_mode", String(focusMode));
+    invoke("cmd_set_focus_mode", { enabled: focusMode }).catch(() => undefined);
+  }
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
+  function handleKeydown(e: KeyboardEvent): void {
+    if (showSettings) return;
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    switch (e.key.toLowerCase()) {
+      case "r":
+        widget.refresh();
+        break;
+      case "c": {
+        const cost = $widget.payload?.today_spend_cents;
+        if (cost != null) navigator.clipboard.writeText(formatCents(cost));
+        break;
+      }
+      case "escape":
+        getCurrentWindow().hide();
+        break;
+    }
+  }
+
   onMount(async () => {
     widget.refresh();
 
-    // Sync persisted settings to the Rust backend on startup so alerts and
-    // poll cadence take effect before the first user interaction.
     const savedInterval = localStorage.getItem("poll_interval_secs");
     if (savedInterval) {
       const secs = parseInt(savedInterval, 10);
@@ -40,7 +85,23 @@
       const cents = parseInt(savedLimit, 10);
       if (cents > 0) await invoke("cmd_set_daily_limit", { cents }).catch(() => undefined);
     }
+
+    // Sync focus mode to backend on startup
+    if (focusMode) {
+      invoke("cmd_set_focus_mode", { enabled: true }).catch(() => undefined);
+    }
+
+    document.addEventListener("keydown", handleKeydown);
   });
+
+  onDestroy(() => {
+    document.removeEventListener("keydown", handleKeydown);
+  });
+
+  // Compute delta when first payload arrives
+  $: if ($widget.payload && deltaCents === null) {
+    computeDelta($widget.payload.today_spend_cents);
+  }
 
   async function openDashboard(): Promise<void> {
     await openUrl("https://useobol.pages.dev/overview");
@@ -130,6 +191,23 @@
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
           </svg>
         </button>
+        <!-- Focus mode toggle -->
+        <button
+          type="button"
+          on:click={toggleFocus}
+          title={focusMode ? "Focus mode ON (click to disable)" : "Focus mode (mute notifications)"}
+          aria-label="Toggle focus mode"
+          class="flex h-6 w-6 items-center justify-center rounded transition-colors
+            {focusMode ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            {#if focusMode}
+              <path d="M18.36 6.64a9 9 0 1 1-12.73 0" /><line x1="12" y1="2" x2="12" y2="12" />
+            {:else}
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            {/if}
+          </svg>
+        </button>
         <!-- Theme toggle -->
         <button
           type="button"
@@ -172,6 +250,14 @@
         </div>
       {:else}
         {@const p = $widget.payload}
+
+        <!-- Cost since last open delta badge -->
+        {#if deltaVisible && deltaCents && deltaCents > 0}
+          <div class="mb-3 flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-1.5">
+            <span class="font-mono text-[10px] text-primary">+{formatCents(deltaCents)}</span>
+            <span class="text-[10px] text-muted-foreground">since you last looked</span>
+          </div>
+        {/if}
 
         <!-- Mood meter -->
         <div class="mb-3 rounded-lg border border-border bg-card p-4">

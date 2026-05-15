@@ -33,6 +33,13 @@
   .face {
     display: inline-block;
     transform-origin: center;
+  }
+
+  .face-chill,
+  .face-warm,
+  .face-hot,
+  .face-fire,
+  .face-meltdown {
     will-change: transform, opacity;
   }
 

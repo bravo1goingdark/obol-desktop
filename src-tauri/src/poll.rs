@@ -13,6 +13,7 @@ static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::
 fn get_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(|| {
         reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
             .timeout(Duration::from_secs(10))
             .user_agent(concat!("obol-desktop/", env!("CARGO_PKG_VERSION")))
             .build()
