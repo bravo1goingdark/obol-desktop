@@ -348,16 +348,8 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             if let Some(tray) = app.tray_by_id("main") {
                 // Skip tray update in focus mode.
                 if !state.focus_mode.load(Ordering::Relaxed) {
-                    let status = if payload.budget_cents > 0 && payload.budget_percent >= 100.0 {
-                        "🔴"
-                    } else if payload.budget_cents > 0 && payload.budget_percent >= 80.0 {
-                        "🟡"
-                    } else {
-                        "🟢"
-                    };
                     let label = format!(
-                        "{} {} {}",
-                        status,
+                        "{} {}",
                         payload.mood.face,
                         short_cents(payload.today_spend_cents)
                     );
