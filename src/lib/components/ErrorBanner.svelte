@@ -12,6 +12,7 @@
     trial_expired: "Your desktop widget trial has ended.",
     offline: "Offline. Showing cached data.",
     network: "Couldn't reach Obol. Retrying next tick.",
+    decode: "Unexpected data format from Obol. Retrying next tick.",
   };
 
   async function reconnect(): Promise<void> {

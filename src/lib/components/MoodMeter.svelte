@@ -7,14 +7,14 @@
   export let animate = true;
 
   $: colorClass = (
-    { 
+    {
       chill: "text-muted-foreground",
       warm: "text-muted-foreground",
       hot: "text-amber-500",
       fire: "text-amber-500",
       meltdown: "text-destructive",
-    } as const
-  )[mood.severity];
+    } as Record<string, string>
+  )[mood.severity] ?? "text-muted-foreground";
 
   $: animClass = animate ? `face-${mood.severity}` : "";
 </script>

@@ -10,8 +10,12 @@
   const SKINS = [
     { label: "Default", value: "", icon: "◐" },
     { label: "Terminal", value: "terminal", icon: "▶" },
-    { label: "Neon", value: "paper", icon: "⚡" },
+    { label: "Neon", value: "neon", icon: "⚡" },
   ] as const;
+  // Migrate stored "paper" key to "neon" (renamed in v2).
+  if (localStorage.getItem("obol_skin") === "paper") {
+    localStorage.setItem("obol_skin", "neon");
+  }
   let activeSkin = localStorage.getItem("obol_skin") || "";
 
   function setSkin(value: string): void {
@@ -244,7 +248,7 @@
       </div>
     </section>
 
-    <!-- ── ACCOUNT ────────────────────────────────────────────── -->
+    <!-- ── APPEARANCE ──────────────────────────────────────────── -->
     <section>
       <p class="mb-1.5 font-mono text-[9px] uppercase tracking-widest text-muted-foreground/60">
         Appearance

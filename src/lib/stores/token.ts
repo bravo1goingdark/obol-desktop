@@ -54,15 +54,6 @@ function create() {
       await invoke("cmd_delete_token").catch(() => undefined);
       set(null);
     },
-    async switchTo(token: string): Promise<void> {
-      await invoke("cmd_save_token", { token });
-      set(token);
-    },
-    getAccounts,
-    removeAccount(prefix: string): void {
-      const accounts = getAccounts().filter((a) => a.prefix !== prefix);
-      saveAccounts(accounts);
-    },
   };
 }
 

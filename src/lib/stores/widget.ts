@@ -27,12 +27,24 @@ const initial: WidgetState = {
 function create() {
   const { subscribe, update } = writable<WidgetState>(initial);
   const unsubs: UnlistenFn[] = [];
+  // Cleared by widget-update and widget-error events. Guards against the poll
+  // loop being skipped (paused / idle / trial-expired) after refresh() sets
+  // loading=true, which would leave the spinner running indefinitely.
+  let loadingTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  function clearLoadingTimeout(): void {
+    if (loadingTimeout !== null) {
+      clearTimeout(loadingTimeout);
+      loadingTimeout = null;
+    }
+  }
 
   async function wire(): Promise<void> {
     // Successful fetch — Rust emits the full WidgetPayload as the event
     // payload.
     unsubs.push(
       await listen<WidgetPayload>("widget-update", (ev) => {
+        clearLoadingTimeout();
         update((s) => ({
           ...s,
           payload: ev.payload,
@@ -54,6 +66,7 @@ function create() {
     // Failed fetch — Rust emits a string tag matching ApiErrorKind.
     unsubs.push(
       await listen<ApiErrorKind>("widget-error", (ev) => {
+        clearLoadingTimeout();
         update((s) => ({
           ...s,
           loading: false,
@@ -79,10 +92,19 @@ function create() {
   }
 
   async function refresh(): Promise<void> {
+    clearLoadingTimeout();
     update((s) => ({ ...s, loading: true }));
+    // If the poll loop is skipped (paused / idle / trial-expired / no token),
+    // Rust won't emit widget-update or widget-error. Clear the spinner after
+    // 15 s so the UI doesn't stay in a permanent loading state.
+    loadingTimeout = setTimeout(() => {
+      loadingTimeout = null;
+      update((s) => (s.loading ? { ...s, loading: false } : s));
+    }, 15_000);
     try {
       await invoke("cmd_refresh_now");
     } catch (err) {
+      clearLoadingTimeout();
       update((s) => ({ ...s, loading: false, error: "network" }));
       console.error("refresh failed", err);
     }

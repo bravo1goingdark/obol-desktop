@@ -1,6 +1,6 @@
 //! HTTP fetch for the Obol widget payload. Returns typed errors so the
 //! Svelte side can render the right banner (unauthenticated /
-//! rate-limited / trial_expired / network).
+//! rate-limited / trial_expired / offline / network / decode).
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -42,6 +42,77 @@ pub struct DailyPoint {
     pub cents: i64,
 }
 
+// ── v2 structs ────────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderBreakdownItem {
+    pub provider: String,
+    pub cents: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ForecastDetail {
+    pub projected_total_cents: i64,
+    pub daily_average_cents: i64,
+    pub days_remaining: i64,
+    pub confidence: String,
+    pub over_budget_cents: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheStats {
+    pub hit_rate_pct: f64,
+    pub savings_cents: i64,
+    pub potential_additional_savings_cents: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnomalyInfo {
+    pub delta_cents: i64,
+    pub median_cents: i64,
+    pub modified_z: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeriodAlertSlot {
+    pub threshold_cents: i64,
+    pub spent_cents: i64,
+    pub pct: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PeriodAlerts {
+    pub daily: Option<PeriodAlertSlot>,
+    pub weekly: Option<PeriodAlertSlot>,
+    pub monthly: Option<PeriodAlertSlot>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyRequest {
+    pub id: String,
+    pub model: String,
+    pub provider: String,
+    pub cost_cents: i64,
+    pub latency_ms: i64,
+    pub status_code: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cached_tokens: i64,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyStats {
+    pub active: bool,
+    pub error_rate: f64,
+    pub cache_hit_rate: f64,
+    pub rpm: i64,
+    pub total_requests_today: i64,
+    pub recent_requests: Vec<ProxyRequest>,
+}
+
+// ── Core payload ──────────────────────────────────────────────────────────────
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetPayload {
     pub month_spend_cents: i64,
@@ -55,6 +126,19 @@ pub struct WidgetPayload {
     pub forecast_month_cents: Option<i64>,
     pub active_connections: i64,
     pub updated_at: String,
+    // v2 fields — absent on older API versions, default to empty/None
+    #[serde(default)]
+    pub provider_breakdown: Vec<ProviderBreakdownItem>,
+    #[serde(default)]
+    pub forecast: Option<ForecastDetail>,
+    #[serde(default)]
+    pub period_alerts: Option<PeriodAlerts>,
+    #[serde(default)]
+    pub cache: Option<CacheStats>,
+    #[serde(default)]
+    pub anomaly: Option<AnomalyInfo>,
+    #[serde(default)]
+    pub proxy: Option<ProxyStats>,
 }
 
 /// Metadata from the 402 `trial_expired` response. Emitted as a
@@ -91,6 +175,9 @@ pub enum PollError {
     RateLimited,
     #[error("trial expired")]
     TrialExpired(TrialExpiredPayload),
+    /// No route to host — connection refused, DNS failure, or no network.
+    #[error("offline")]
+    Offline,
     #[error("network: {0}")]
     Network(String),
     #[error("decode: {0}")]
@@ -98,15 +185,16 @@ pub enum PollError {
 }
 
 impl PollError {
-    /// Tag that matches the `ApiErrorKind` enum in src/lib/types.ts so
+    /// Tag that matches the `ApiErrorKind` union in src/lib/types.ts so
     /// the Svelte side can switch on it.
     pub fn tag(&self) -> &'static str {
         match self {
             PollError::Unauthenticated => "unauthenticated",
             PollError::RateLimited => "rate-limited",
             PollError::TrialExpired(_) => "trial_expired",
+            PollError::Offline => "offline",
             PollError::Network(_) => "network",
-            PollError::Decode(_) => "network",
+            PollError::Decode(_) => "decode",
         }
     }
 }
@@ -126,10 +214,16 @@ pub async fn fetch_widget(
     if let Some(tag) = etag {
         req = req.header("If-None-Match", tag);
     }
-    let res = req
-        .send()
-        .await
-        .map_err(|e| PollError::Network(e.to_string()))?;
+    let res = req.send().await.map_err(|e| {
+        // Distinguish "no network / DNS failed / connection refused" from
+        // other reqwest errors so the banner can say "Offline" instead of
+        // the generic "Couldn't reach Obol" message.
+        if e.is_connect() || e.is_timeout() {
+            PollError::Offline
+        } else {
+            PollError::Network(e.to_string())
+        }
+    })?;
 
     match res.status().as_u16() {
         304 => return Ok(None),

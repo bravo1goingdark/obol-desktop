@@ -34,8 +34,12 @@ pub struct AppState {
     /// Whether the main window is always on top.
     pub always_on_top: Mutex<bool>,
     /// Highest budget threshold (80 or 100) we've notified in this session.
-    /// Resets to 0 when spend drops back below 80 %.
+    /// Resets to 0 at the start of each new billing month.
     pub last_notified_threshold: Mutex<u8>,
+    /// "YYYY-MM" string of the billing month when last_notified_threshold was
+    /// last reset. Used to detect month rollover without depending on spend
+    /// dropping to zero (which may never happen on carry-over charges).
+    pub last_thresh_month: Mutex<String>,
     /// Handle to the "Always on top" check-menu item so we can update its
     /// checkmark from the menu-event handler.
     pub aot_item: Mutex<Option<tauri::menu::CheckMenuItem<tauri::Wry>>>,
@@ -78,6 +82,7 @@ impl AppState {
             last: Mutex::new(None),
             always_on_top: Mutex::new(false),
             last_notified_threshold: Mutex::new(0),
+            last_thresh_month: Mutex::new(String::new()),
             aot_item: Mutex::new(None),
             pause_item: Mutex::new(None),
             copy_today_item: Mutex::new(None),
@@ -374,6 +379,26 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
             // Suppressed in focus mode.
             if payload.budget_cents > 0 && !state.focus_mode.load(Ordering::Relaxed) {
                 let pct = payload.budget_percent;
+
+                // Reset the threshold counter at the start of a new billing
+                // month. Comparing the "YYYY-MM" prefix of updated_at is
+                // reliable even when month_spend_cents carries over (e.g. a
+                // prorated charge on day 1).
+                if payload.updated_at.len() >= 7 {
+                    let this_month = &payload.updated_at[..7];
+                    let mut last_month = state
+                        .last_thresh_month
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if last_month.as_str() != this_month {
+                        *last_month = this_month.to_string();
+                        *state
+                            .last_notified_threshold
+                            .lock()
+                            .unwrap_or_else(|e| e.into_inner()) = 0;
+                    }
+                }
+
                 let mut last_thresh = state
                     .last_notified_threshold
                     .lock()
@@ -406,12 +431,6 @@ async fn poll_once(app: &AppHandle, state: &AppState) {
                             short_cents(payload.budget_cents),
                         ))
                         .show();
-                } else if pct < 80.0 {
-                    // Only reset at the start of a new billing month (when
-                    // month_spend drops). Don't reset on minor fluctuations.
-                    if payload.month_spend_cents == 0 {
-                        *last_thresh = 0;
-                    }
                 }
             }
 

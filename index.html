@@ -14,6 +14,8 @@
       var theme = saved || (sys ? "dark" : "light");
       if (theme === "dark") document.documentElement.classList.add("dark");
       var skin = localStorage.getItem("obol_skin");
+      // Migrate stored "paper" key to "neon" (renamed skin).
+      if (skin === "paper") { skin = "neon"; localStorage.setItem("obol_skin", "neon"); }
       if (skin) document.documentElement.setAttribute("data-skin", skin);
     </script>
   </head>

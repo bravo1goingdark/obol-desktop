@@ -26,6 +26,9 @@
   let csvExportTimer: ReturnType<typeof setTimeout> | null = null;
   let showProxy = false;
   let showInsights = false;
+  let unlistenFocus: (() => void) | null = null;
+
+  $: series14 = ($widget.payload?.daily_series ?? []).slice(-14);
 
   // Insights icon only appears when there's extra data to show
   $: hasInsights = $widget.payload && (
@@ -36,12 +39,17 @@
   );
 
   // ── Cost-since-last-open delta ──────────────────────────────────────────
-  let deltaCents: number | null = null;
+  let deltaComputed = false;
+  let deltaCents = 0;
   let deltaVisible = false;
 
   function computeDelta(currentCents: number): void {
+    deltaComputed = true;
     const key = "obol_last_seen_today_cents";
     const prev = localStorage.getItem(key);
+    // Always write the baseline so the next window-open computes vs today's
+    // closing value, not a stale one from days ago.
+    localStorage.setItem(key, String(currentCents));
     if (prev !== null) {
       const diff = currentCents - parseInt(prev, 10);
       if (diff > 0) {
@@ -50,7 +58,6 @@
         setTimeout(() => (deltaVisible = false), 5000);
       }
     }
-    localStorage.setItem(key, String(currentCents));
   }
 
   // ── Focus / DND mode ────────────────────────────────────────────────────
@@ -108,15 +115,24 @@
       invoke("cmd_set_focus_mode", { enabled: true }).catch(() => undefined);
     }
 
+    // Reset panel state each time the window is shown so the user doesn't
+    // land on the proxy or insights view unexpectedly after hiding the widget.
+    unlistenFocus = await getCurrentWindow().listen("tauri://focus", () => {
+      showProxy = false;
+      showInsights = false;
+      deltaComputed = false;
+    });
+
     document.addEventListener("keydown", handleKeydown);
   });
 
   onDestroy(() => {
+    if (unlistenFocus) unlistenFocus();
     document.removeEventListener("keydown", handleKeydown);
   });
 
-  // Compute delta when first payload arrives
-  $: if ($widget.payload && deltaCents === null) {
+  // Compute delta once per window-show (deltaComputed resets on each mount).
+  $: if ($widget.payload && !deltaComputed) {
     computeDelta($widget.payload.today_spend_cents);
   }
 
@@ -548,12 +564,12 @@
         <div class="mb-3 rounded-lg border border-border bg-card p-4">
           <div class="mb-2 flex items-center justify-between">
             <p class="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-              Last 14 days
+              Last {series14.length} day{series14.length === 1 ? "" : "s"}
             </p>
-            {#if p.daily_series.length > 0}
+            {#if series14.length > 0}
               <button
                 type="button"
-                on:click={() => exportCsv(p.daily_series)}
+                on:click={() => exportCsv(series14)}
                 title="Export CSV"
                 class="flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[9px] transition-colors
                   {csvExported
@@ -578,7 +594,7 @@
               </button>
             {/if}
           </div>
-          <MiniSparkline data={p.daily_series} />
+          <MiniSparkline data={series14} />
         </div>
 
       {/if}

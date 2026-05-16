@@ -170,8 +170,8 @@
   font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
 }
 
-/* Paper: warm sepia, book-like */
-[data-skin="paper"] {
+/* Neon: electric purple palette */
+[data-skin="neon"] {
   --background: 260 20% 8%;
   --foreground: 280 100% 90%;
   --card: 260 20% 10%;
@@ -190,6 +190,6 @@
   --accent: 260 15% 14%;
   --accent-foreground: 280 100% 90%;
 }
-[data-skin="paper"] body {
+[data-skin="neon"] body {
   font-family: "Instrument Serif", Georgia, serif;
 }

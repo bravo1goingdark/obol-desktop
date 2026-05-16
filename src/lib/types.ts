@@ -94,7 +94,8 @@ export type ApiErrorKind =
   | "rate-limited"
   | "trial_expired"
   | "offline"
-  | "network";
+  | "network"
+  | "decode";
 
 export interface TrialExpiredPayload {
   error: string;
